@@ -58,11 +58,7 @@ loadable without conversion. The monitor-history CSV alone gains three columns:
 The first five columns preserve the previous names and order. Exposure CSV
 export remains unchanged. No extra files are required to run the application.
 
-## Display implementation references
+## Display implementation note
 
-- Matplotlib Figure/GridSpec and shared axes:
-  https://matplotlib.org/stable/api/figure_api.html
-- Qt platform selection for optional native offscreen tests:
-  https://doc.qt.io/qt-6/qpa.html
-
-These are GUI implementation references, not support for any material model.
+The layout uses Matplotlib Figure/GridSpec shared axes inside the existing Qt
+window. These are GUI implementation details, not support for any material model.

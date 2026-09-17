@@ -5,7 +5,6 @@
 - Single shared spectrum sample for top sum and middle difference.
 - Mirror columns appended to monitor CSV; existing five-column prefix preserved.
 - No physics, RF, optimizer, material, or playback behavior changes.
-- New Agg callback/render tests and updated optional native Qt expectations.
 
 ---
 
@@ -20,7 +19,7 @@
 - RF-checkbox updates block signals so completion/loading cannot retrigger pulses.
 - Core model, optimizer, scheduler, file schemas and material values are unchanged.
 
-See PLAYBACK_FIX.md and VALIDATION.md for precise behavior and test limitations.
+See PLAYBACK_FIX.md for precise playback behavior.
 
 ---
 
@@ -39,12 +38,10 @@ equations; the final result is independently replayed using the existing pulse
 scheduler and checked at finer dt. Export writes the existing JSON/CSV pulse
 formats plus snapshot, material, convergence report and per-bin diagnostics.
 
-The main live GUI retains two principal dynamic plots. Manual per-bin editing,
+The main live GUI retains the main spectrum, tensor-spectrum, and time-trace
+plots. Manual per-bin editing,
 protected numeric fields, independent monitor placement and all recovery/RF
-controls remain. Twelve inherited source files, including the complete kinetics,
-manual editor and original GUI implementations, are byte-identical to the
-Boltzmann-recovery archive. The new app entry point wraps that GUI in
-`designer_gui.py`. See SOURCE_INTEGRITY_TENSOR.json.
+controls remain. The app entry point loads `designer_gui.py`.
 
 No physical rate values, RF coupling law, mirror response, DNP source, T1 term,
 or recovery mechanism was changed. Verification can recommend a smaller

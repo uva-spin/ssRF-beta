@@ -51,8 +51,7 @@ PySide6, and PyQt5 in that order. An existing environment with NumPy, Matplotlib
 and one of these Qt bindings can run `python3 run_app.py` directly.
 
 For a different Qt binding, install `requirements-core.txt` and that binding
-instead of the PyQt6 requirements. The ideal model does not require SciPy;
-SciPy is needed by some of the reference/regression tests.
+instead of the PyQt6 requirements. The ideal model does not require SciPy.
 
 ## First run: enter your own value in EVERY bin
 
@@ -344,44 +343,16 @@ It produces an editable horn/pedestal program, command-profile diagnostics,
 local intensity traces and a delivered-exposure audit. It contains no automatic
 tensor maximization.
 
-## Validation and provenance
-
-```bash
-python3 -m pip install -r requirements-dev.txt
-python3 -m pytest -q
-# With a Qt binding installed, optional window/editor smoke test:
-QT_QPA_PLATFORM=offscreen python3 -m pytest -q tests/test_gui_optional.py tests/test_arrow_gui_optional.py
-```
-
-Tests include multiple profiles and overlapping pulses, start/stop edge handling,
-sub-dt durations, per-bin exposure, mirror indexing, full three-level RF matrix
-rates, source conservation, negative polarization, JSON/CSV round trips, direct
-regression to the working one-bin package, and comparisons with the RF-only
-matrix exponential. The old 21 tests are retained as baseline regressions.
-
-The baseline `model.py`, `lineshape.py`, `rf_profile.py` and `baseline_gui.py`
-are byte-identical to the working archive. `BASELINE_MANIFEST.json` records
-hashes. New functionality is in `ideal_model.py`, `pulse_program.py`,
-`profile_editor.py`, and the new `gui.py`. Legacy Voigt functions are retained
-only for compatibility/regression; the ideal RF path does not call them.
-
-The inherited diffusion/DNP/extra packet-weighting parameters remain
-phenomenological. Passing software tests demonstrates implementation consistency,
-not experimental validation or global tensor optimality.
-
 ## Scope of this update
 
 This update changes only the interface and pure editing helpers. The population
 model, ideal RF scheduler and time stepping, pulse-program schema, static
 lineshape, RF/DNP coupling weights, diffusion kernel, and all material defaults
-are unchanged. `SOURCE_INTEGRITY.json` contains hashes compared directly with the
-previous ideal-profile ZIP, and a test enforces them. Existing JSON programs and
-full-format CSV programs remain compatible.
+are unchanged. Existing JSON programs and full-format CSV programs remain
+compatible.
 
 The underlying design uses Qt's documented QAbstractSpinBox/QLineEdit separation:
 only the embedded line edit is made read-only, leaving the on-screen spin buttons
 usable. Wheel events are ignored. Implementation references:
 https://doc.qt.io/qt-6/qabstractspinbox.html
 https://doc.qt.io/qt-6/qlineedit.html
-
-See `VALIDATION.md` for the exact executed tests and the limits of GUI validation.

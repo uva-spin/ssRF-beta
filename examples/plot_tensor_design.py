@@ -54,6 +54,6 @@ def plot_design(directory,show=False):
 if __name__=='__main__':
     import argparse
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('directory',nargs='?',default=str(ROOT/'outputs'/'default_701_design'))
+    parser.add_argument('directory',help='Exported tensor design directory')
     args=parser.parse_args()
     for path in plot_design(args.directory):print(path)

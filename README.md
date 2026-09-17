@@ -35,8 +35,8 @@ file formats are unchanged.
 
 **The corrected RF ON start/replay behavior and Pause at program end are retained.**
 No population equation, recovery parameter, pulse scheduler, RF command, DNP/T1
-source, optimizer or material-file schema was changed. See DISPLAY_UPDATE.md,
-VALIDATION.md and SOURCE_INTEGRITY_DISPLAY.json for scope and test results.
+source, optimizer or material-file schema was changed. See `DISPLAY_UPDATE.md`
+and `PLAYBACK_FIX.md` for the current display and playback behavior.
 
 ## Corrected RF playback workflow
 
@@ -249,17 +249,11 @@ python3 run_app.py --state my_state.npz
 Output directories must be new to avoid overwriting previous designs. State and
 material files with different parameters are not silently combined.
 
-## Documentation and tests
+## Included package
 
 `TENSOR_DESIGN.md` describes the optimizer and its assumptions.
-`RECOVERY_MODEL.md` is retained from the Boltzmann-recovery package.
-`USER_GUIDE.md` retains the detailed manual-profile editing instructions.
-`SOURCE_INTEGRITY_PLAYBACK.json` compares this patch with the input tensor-designer archive.
-Historical integrity files are kept under `provenance/`.
-
-```bash
-python3 -m pip install -r requirements-dev.txt
-pytest -q
-```
-
-See `VALIDATION.md` for the tests actually run and GUI-test limitations.
+`USER_GUIDE.md` contains the detailed manual-profile editing instructions.
+`RECOVERY_MODEL.md`, `DISPLAY_UPDATE.md`, and `PLAYBACK_FIX.md` document the
+current model, display, and RF playback behavior. The package intentionally
+omits development-only tests, provenance archives, patch files, and generated
+output directories.

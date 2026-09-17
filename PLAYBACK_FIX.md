@@ -62,11 +62,6 @@ Qt documents that `setChecked` can emit `toggled`, unlike `clicked`, which is
 emitted only by activation (or `click`/`animateClick`). Reference:
 https://doc.qt.io/qt-6/qabstractbutton.html#toggled
 
-The added headless callback harness uses the actual GUI method bodies with small
-widget doubles. It tests control flow but is NOT a native Qt mouse/rendering test.
-The optional Qt regression module exercises actual buttons and the designer
-worker on a system with an installed Qt binding.
-
 ## Scope
 
 Changed runtime files: `ssrf_realtime/gui.py`, `ssrf_realtime/designer_gui.py`.
@@ -74,7 +69,7 @@ Added runtime file: `ssrf_realtime/playback.py`.
 
 Unchanged: population equations and model, ideal scheduler, pulse schema,
 lineshape, optimizer, material configuration and snapshot logic, manual editor,
-arrow-only widgets and kinetic defaults. See SOURCE_INTEGRITY_PLAYBACK.json.
+arrow-only widgets and kinetic defaults.
 
 Use a fresh extraction directory to avoid importing mixed versions. Saved
 material configurations, population snapshots and pulse-program JSON/CSV remain

@@ -1,9 +1,0 @@
-{
-  "baseline_archive": "spin1_ssrf_realtime_voigt_burn_v2.zip",
-  "sha256": "35b4bd7d95653b9b31e46a5e53939609ad11032ef6769bd1c8c792a3661a7232",
-  "unchanged_baseline_files": {
-    "ssrf_realtime/lineshape.py": "9eefec4bd5a015275f86b46c9ed7046c00e882471ecc28f3ba9dd8bda53857a1",
-    "ssrf_realtime/rf_profile.py": "52747e21865e4bc66dfebc397e675f9e782f83cc5bf978a674c61b47f9916971"
-  },
-  "revision_note": "Recovery was explicitly revised. Only genuinely byte-identical files remain in this hash list. See RECOVERY_SOURCE_MANIFEST.json."
-}
