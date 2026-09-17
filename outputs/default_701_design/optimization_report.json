@@ -1,0 +1,69 @@
+{
+  "schema": "ssrf.tensor_design.v1",
+  "status": "completed",
+  "objective": "maximize positive Q at common endpoint; shortest within tolerance",
+  "search_scope": "finite horizon scan + bounded local L-BFGS-B power optimization; no global certificate",
+  "snapshot_fingerprint": "89adea32c3aee0dee4334bed4848bf882c57d1f2b3fed50987b0fe46d089a20a",
+  "snapshot_simulation_time": 0.0,
+  "initial": {
+    "P": 0.45000000000000007,
+    "Q": 0.15812595436061372
+  },
+  "final": {
+    "P": 0.4026373174777582,
+    "Q": 0.22496438108373198
+  },
+  "no_RF_at_same_endpoint": {
+    "P": 0.45000000000000007,
+    "Q": 0.15812595436061372
+  },
+  "delta_Q": 0.06683842672311827,
+  "RF_advantage_over_no_RF": 0.06683842672311827,
+  "delta_P": -0.04736268252224185,
+  "common_start": 0.0,
+  "common_duration": 0.19693793171894836,
+  "active_bins": 226,
+  "candidate_bins": 226,
+  "maximum_command": 20.0,
+  "integrated_base_exposure": 571.6057185998495,
+  "best_Q_found_fine_grid": 0.2251669019768528,
+  "near_optimum_Q_tolerance": 0.00013408189523247816,
+  "time_step_check": {
+    "absolute_Q_difference": 1.6810690572577336e-05,
+    "weighted_fraction_RMS_difference": 1.894007300524198e-05,
+    "scheduler_vs_fine_search_Q_difference": 0.00010002224928179482,
+    "allowed_Q_difference": 2e-05
+  },
+  "search_dt_used": 0.0033507715466954005,
+  "material_dt": 0.0015,
+  "recommended_playback_dt": 0.000375,
+  "validation_halvings": 2,
+  "settings": {
+    "max_power": 20.0,
+    "min_duration": 0.01,
+    "max_duration": 2.0,
+    "duration_samples": 7,
+    "duration_refinements": 3,
+    "max_iterations": 30,
+    "starts": 2,
+    "search_dt": 0.004,
+    "max_steps": 20000,
+    "max_validation_halvings": 6,
+    "max_wall_seconds": 150.0,
+    "q_absolute_tolerance": 1e-06,
+    "q_relative_tolerance": 0.002,
+    "convergence_tolerance": 2e-05,
+    "candidate_mode": "union",
+    "candidate_threshold": 1e-10,
+    "regions": [],
+    "per_bin_power_limits": {},
+    "seed": 42
+  },
+  "warnings": [
+    "Playback requires the smaller validated dt recorded in this report. The GUI applies it only when loading this design.",
+    "Some local power optimizations reached a limit or did not converge.",
+    "Objective is final Q, not Q minus the no-RF endpoint. Natural dynamics may contribute to the increase."
+  ],
+  "budget_reached": false,
+  "elapsed_wall_seconds": 46.32667558800017
+}

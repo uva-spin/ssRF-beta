@@ -1,0 +1,95 @@
+{
+  "schema": "ssrf.material.v1",
+  "name": "Uncalibrated demonstration",
+  "description": "",
+  "units": "dimensionless_R__simulation_time__base_RF_rate",
+  "parameters": {
+    "grid": {
+      "n_bins": 701,
+      "r_min": -3.0,
+      "r_max": 3.0
+    },
+    "lineshape": {
+      "line_gamma": 0.05,
+      "line_asym": 0.04
+    },
+    "initial_state": {
+      "p0": 0.45,
+      "q0": null
+    },
+    "rf_coupling": {
+      "gamma_rf": 2.0,
+      "capacity_rate_power": 1.0,
+      "capacity_rate_clip": 12.0
+    },
+    "recovery": {
+      "diffusion_scale": 5.0,
+      "zq_width_R": 0.05,
+      "diffusion_overlap": "lorentzian",
+      "cross_branch_ratio": 1.0,
+      "double_quantum_ratio": 0.1,
+      "orientation_corr_fraction": 0.0,
+      "orientation_corr_width_deg": 20.0,
+      "kernel_cutoff_widths": 0.0,
+      "microwave_diffusion_factor": 1.0
+    },
+    "dnp": {
+      "p_dnp_sat": 0.58,
+      "dnp_rate": 0.05
+    },
+    "t1": {
+      "t1_rate": 0.0,
+      "t1_p_eq": 0.0
+    },
+    "run_defaults": {
+      "rf_burn_R": 0.4,
+      "rf_enabled": false,
+      "dnp_enabled": false,
+      "diffusion_enabled": true
+    },
+    "numerics": {
+      "dt": 0.0015
+    },
+    "display": {
+      "plot_signal_units": true,
+      "plot_divisor": 10.0,
+      "display_scale": 1.0,
+      "calibration_p": 0.5,
+      "noise_sigma": 0.0
+    },
+    "legacy_voigt_unused_in_ideal_mode": {
+      "rf_gaussian_fwhm_R": 0.0,
+      "rf_lorentzian_fwhm_R": 0.0,
+      "rf_profile_normalization": "center_bin",
+      "rf_profile_quadrature_order": 0
+    }
+  },
+  "optimizer": {
+    "max_power": 20.0,
+    "min_duration": 0.01,
+    "max_duration": 2.0,
+    "duration_samples": 7,
+    "duration_refinements": 3,
+    "max_iterations": 30,
+    "starts": 2,
+    "search_dt": 0.004,
+    "max_steps": 20000,
+    "max_validation_halvings": 6,
+    "max_wall_seconds": 150.0,
+    "q_absolute_tolerance": 1e-06,
+    "q_relative_tolerance": 0.002,
+    "convergence_tolerance": 2e-05,
+    "candidate_mode": "union",
+    "candidate_threshold": 1e-10,
+    "regions": [],
+    "per_bin_power_limits": {},
+    "seed": 42
+  },
+  "gui": {
+    "steps_per_tick": 12,
+    "trace_max_points": 4500,
+    "timer_interval_ms": 35,
+    "window_width": 1000,
+    "window_height": 555
+  }
+}

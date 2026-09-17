@@ -1,0 +1,197 @@
+--- before/ssrf_realtime/gui.py
++++ after/ssrf_realtime/gui.py
+@@ -1,4 +1,8 @@
+-"""Compact two-plot ideal-bin RF simulator, with a separate pulse editor."""
++"""Compact spectrum / tensor / monitor view for the ideal-bin RF simulator.
++
++All displayed curves are projections of the existing populations. This module
++does not change RF commands, population derivatives or program timing.
++"""
+ from __future__ import annotations
+ import sys
+ import csv
+@@ -30,6 +34,8 @@
+         self.trace_t = []
+         self.trace_Ip_R = []
+         self.trace_Im_R = []
++        self.trace_Ip_minusR = []
++        self.trace_Im_minusR = []
+         self.trace_max_points = 4500
+         self.trace_start_R = float(self.model.params.rf_burn_R)
+         self.trace_start_vals = {}
+@@ -97,7 +103,7 @@
+         self.monitor_exact_button = QtWidgets.QPushButton("Enter exact monitor R...")
+         self.monitor_exact_button.clicked.connect(self._enter_monitor_R)
+         markers_layout.addWidget(self.monitor_exact_button)
+-        hint = QtWidgets.QLabel("M chooses the two lower traces. The mirror follows at -M. "
++        hint = QtWidgets.QLabel("M chooses the solid monitor traces; -M supplies the dotted mirror traces. "
+                                "Plot clicks and scrolling do not move markers or alter settings.")
+         hint.setWordWrap(True); hint.setStyleSheet("font-size: 10px;")
+         markers_layout.addWidget(hint)
+@@ -155,9 +161,12 @@
+         self.info_label.setStyleSheet("font-size: 10px;")
+ 
+     def _init_plots(self):
+-        # Two principal panels only; the RF command uses the top panel's right axis.
+-        self.ax_spec = self.fig.add_subplot(2,1,1)
+-        self.ax_trace = self.fig.add_subplot(2,1,2)
++        # Keep the existing compact window height. The two spectral panels
++        # share a physical-R axis; the monitor panel has its own time axis.
++        grid = self.fig.add_gridspec(3, 1, height_ratios=[1.4, 0.9, 1.1])
++        self.ax_spec = self.fig.add_subplot(grid[0, 0])
++        self.ax_tensor = self.fig.add_subplot(grid[1, 0], sharex=self.ax_spec)
++        self.ax_trace = self.fig.add_subplot(grid[2, 0])
+         self.line_Ip, = self.ax_spec.plot([],[],drawstyle="steps-mid",label="I+(R)")
+         self.line_Im, = self.ax_spec.plot([],[],drawstyle="steps-mid",label="I-(R)")
+         self.line_total, = self.ax_spec.plot([],[],linewidth=1.2,label="total")
+@@ -187,18 +196,77 @@
+                                                        drawstyle="steps-mid",label="RF applied now")
+         self.ax_rf_profile.set_ylabel("RF base rate U",fontsize=8)
+         self.ax_rf_profile.tick_params(axis="y",labelsize=7)
+-        self.ax_spec.set_xlabel("physical R",fontsize=9)
++        # Label the common frequency axis on the middle panel, not twice.
++        self.ax_spec.tick_params(axis="x", labelbottom=False)
+         self.ax_spec.set_ylabel("intensity [arb.]",fontsize=9)
+-        self.ax_spec.set_title("Overlapping Pake doublet and ideal RF commands",fontsize=11)
++        self.ax_spec.set_title("Overlapping Pake doublet and ideal RF commands",fontsize=10)
+         handles, labels = self.ax_spec.get_legend_handles_labels()
+         h2,l2 = self.ax_rf_profile.get_legend_handles_labels()
+         self.ax_spec.legend(handles+h2,labels+l2,loc="upper left",ncol=3,fontsize=7)
+-        self.trace_line_Ip_R, = self.ax_trace.plot([],[],label="I+(R,t)")
+-        self.trace_line_Im_R, = self.ax_trace.plot([],[],label="I-(R,t)")
+-        self.ax_trace.set_xlabel("time since this bin was selected [simulation units]",fontsize=9)
+-        self.ax_trace.set_ylabel("local intensity [arb.]",fontsize=9)
+-        self.ax_trace.legend(loc="best",fontsize=8)
+-        for ax in (self.ax_spec,self.ax_trace): ax.tick_params(labelsize=8)
++        self.line_tensor, = self.ax_tensor.plot(
++            [], [], linewidth=1.3, drawstyle="steps-mid", label="I+(R) - I-(R)")
++        self.tensor_zero = self.ax_tensor.axhline(
++            0.0, linestyle="--", linewidth=0.7, alpha=0.6, label="_nolegend_")
++        self.tensor_monitor_line = self.ax_tensor.axvline(
++            self.model.params.rf_burn_R, linestyle="--", linewidth=0.8, alpha=0.7)
++        self.tensor_mirror_line = self.ax_tensor.axvline(
++            -self.model.params.rf_burn_R, linestyle=":", linewidth=0.8, alpha=0.7)
++        self.ax_tensor.set_title("Tensor spectrum: I+(R) - I-(R)", fontsize=9)
++        self.ax_tensor.set_xlabel("physical R", fontsize=8)
++        self.ax_tensor.set_ylabel("I+ - I- [arb.]", fontsize=8)
++
++        self.trace_line_Ip_R, = self.ax_trace.plot(
++            [], [], label="I+(M,t) monitor", linewidth=1.3)
++        self.trace_line_Im_R, = self.ax_trace.plot(
++            [], [], label="I-(M,t) monitor", linewidth=1.3)
++        # User-requested colors: blue for the + mirror, yellow for the - mirror.
++        # A dark yellow remains readable on a white canvas. Neither trace is
++        # constructed by scaling/reflection of a hole; both use live populations.
++        self.trace_line_Ip_minusR, = self.ax_trace.plot(
++            [], [], linestyle=":", color="tab:blue", linewidth=1.8,
++            label="I+(-M,t) mirror")
++        self.trace_line_Im_minusR, = self.ax_trace.plot(
++            [], [], linestyle=":", color="goldenrod", linewidth=1.8,
++            label="I-(-M,t) mirror")
++        self.ax_trace.set_xlabel("time since trace start [simulation units]", fontsize=8)
++        self.ax_trace.set_ylabel("local intensity [arb.]", fontsize=8)
++        self.ax_trace.legend(loc="best", ncol=2, fontsize=7)
++        for ax in (self.ax_spec, self.ax_tensor, self.ax_trace):
++            ax.tick_params(labelsize=7)
++
++    def _start_new_trace(self, record_now: bool = False) -> None:
++        """Reset all four histories together without changing the live model.
++
++        Also used after material/state loading, where the parent creates a new
++        canvas and replaces the model. Never retain mirrors from an old state.
++        """
++        self.trace_t0 = self.model.t
++        self.trace_start_R = float(self.model.params.rf_burn_R)
++        self.trace_t = []
++        self.trace_Ip_R = []
++        self.trace_Im_R = []
++        self.trace_Ip_minusR = []
++        self.trace_Im_minusR = []
++        self.trace_start_vals = self.model.local_intensities(
++            self.trace_start_R, use_reference=False)
++        mirror = self.model.local_intensities(-self.trace_start_R, use_reference=False)
++        self.trace_start_vals.update(
++            Iplus_mirror=mirror["Iplus"], Iminus_mirror=mirror["Iminus"])
++        if record_now:
++            self._record_trace_point()
++
++    def _record_trace_point(self) -> None:
++        """Record absolute direct/mirror intensities at the same simulation time."""
++        vals = self.model.pair_intensities(self.model.params.rf_burn_R, use_reference=False)
++        self.trace_t.append(float(self.model.t - self.trace_t0))
++        self.trace_Ip_R.append(vals["Iplus_R"])
++        self.trace_Im_R.append(vals["Iminus_R"])
++        self.trace_Ip_minusR.append(vals["Iplus_minusR"])
++        self.trace_Im_minusR.append(vals["Iminus_minusR"])
++        if len(self.trace_t) > self.trace_max_points:
++            for history in (self.trace_t, self.trace_Ip_R, self.trace_Im_R,
++                            self.trace_Ip_minusR, self.trace_Im_minusR):
++                del history[:-self.trace_max_points]
+ 
+     def _set_R(self, value):
+         # Monitoring does not affect commands, schedules, or populations.
+@@ -387,9 +455,14 @@
+             target=Path(path)
+             with target.open("w",newline="",encoding="utf-8") as f:
+                 writer=csv.writer(f)
+-                writer.writerow(["time_since_selection","simulation_time","monitor_R","Iplus","Iminus"])
+-                writer.writerows((t,self.trace_t0+t,self.model.params.rf_burn_R,a,b)
+-                                 for t,a,b in zip(self.trace_t,self.trace_Ip_R,self.trace_Im_R))
++                # Retain the original first five CSV columns and append mirrors.
++                writer.writerow(["time_since_selection", "simulation_time", "monitor_R",
++                                 "Iplus", "Iminus", "mirror_R", "Iplus_mirror", "Iminus_mirror"])
++                writer.writerows((t, self.trace_t0+t, self.trace_start_R, a, b,
++                                  -self.trace_start_R, am, bm)
++                                 for t, a, b, am, bm in zip(
++                                     self.trace_t, self.trace_Ip_R, self.trace_Im_R,
++                                     self.trace_Ip_minusR, self.trace_Im_minusR))
+             exposure_path=target.with_name(target.stem+"_exposure.csv")
+             with exposure_path.open("w",newline="",encoding="utf-8") as f:
+                 writer=csv.writer(f)
+@@ -433,11 +506,23 @@
+             QtWidgets.QMessageBox.critical(self,"Simulation stopped safely",str(exc))
+ 
+     def _update_plots(self):
+-        Rp,Ip,Rm,Im=self.model.packet_spectrum(noise_sigma=self.model.params.noise_sigma)
+-        R,_,_,total=self.model.spectrum(noise_sigma=self.model.params.noise_sigma)
++        # One spectrum snapshot per refresh. Reuse its two branch arrays for
++        # both the upper sum and the middle subtraction, including the SAME
++        # realization of display-only noise. No new convolution/normalization.
++        R,Ip,Im,total=self.model.spectrum(noise_sigma=self.model.params.noise_sigma)
+         Rb=self.model.params.rf_burn_R
+         vals=self.model.response_values(Rb)
+-        self.line_Ip.set_data(Rp,Ip); self.line_Im.set_data(Rm,Im); self.line_total.set_data(R,total)
++        self.line_Ip.set_data(R,Ip); self.line_Im.set_data(R,Im); self.line_total.set_data(R,total)
++        tensor = Ip - Im
++        self.line_tensor.set_data(R, tensor)
++        self.tensor_monitor_line.set_xdata([Rb, Rb])
++        self.tensor_mirror_line.set_xdata([-Rb, -Rb])
++        finite_tensor = self._finite_values(tensor)
++        if finite_tensor.size:
++            low = min(0.0, float(finite_tensor.min()))
++            high = max(0.0, float(finite_tensor.max()))
++            pad = max(1e-8, 0.08 * (high-low))
++            self.ax_tensor.set_ylim(low-pad, high+pad)
+         preview=self.model.preview_rf_field(); active=self.model.applied_rf_field()
+         self.line_preview.set_data(R,preview); self.line_rf_profile.set_data(R,active)
+         self.ax_rf_profile.set_ylim(0, max(0.1,1.1*float(preview.max()),1.1*float(active.max())))
+@@ -452,13 +537,17 @@
+         self.ax_spec.set_xlim(self.model.Rplus[0]-0.03,self.model.Rplus[-1]+0.03)
+         self.trace_line_Ip_R.set_data(self.trace_t,self.trace_Ip_R)
+         self.trace_line_Im_R.set_data(self.trace_t,self.trace_Im_R)
+-        y=self._finite_values(self.trace_Ip_R,self.trace_Im_R)
++        self.trace_line_Ip_minusR.set_data(self.trace_t,self.trace_Ip_minusR)
++        self.trace_line_Im_minusR.set_data(self.trace_t,self.trace_Im_minusR)
++        y=self._finite_values(self.trace_Ip_R, self.trace_Im_R,
++                              self.trace_Ip_minusR, self.trace_Im_minusR)
+         if y.size:
+             lo,hi=float(y.min()),float(y.max())
+             pad=max(1e-8,0.12*max(hi-lo,0.03*max(abs(hi),abs(lo),1e-12)))
+             self.ax_trace.set_ylim(lo-pad,hi+pad)
+         self.ax_trace.set_xlim(0,max(0.5,self.trace_t[-1]+0.05 if self.trace_t else 0.5))
+-        self.ax_trace.set_title(f"Local I+ and I- from trace start — monitor R={Rb:.4f}",fontsize=10)
++        self.ax_trace.set_title(
++            f"Monitor M={Rb:+.4f}; dotted mirrors at -M={-Rb:+.4f}", fontsize=9)
+         self._update_info_label()
+         self.canvas.draw_idle()
+ 

@@ -1,0 +1,8 @@
+Command: OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MPLBACKEND=Agg python -m pytest -q
+
+........................................................................ [ 38%]
+........................................................................ [ 76%]
+.............................................                            [100%]
+189 passed, 4 skipped in 33.54s
+
+Four skipped modules require a Qt binding; native Qt tests were not run.

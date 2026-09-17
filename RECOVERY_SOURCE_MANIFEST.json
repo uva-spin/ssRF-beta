@@ -1,0 +1,90 @@
+{
+  "input_archive": "spin1_ssrf_realtime_ideal_profiles_v2.zip",
+  "input_archive_sha256": "7370246ccebaaa479cc148e5bc77578f0170c9df849a975d20efd77281aab5df",
+  "preserved_methods": {
+    "ssrf_realtime/model.py:Spin1Model.__init__": "987f1040f4914368d51259e53dfd492ed8ac9ac138a6f12af08a20d5fcd51c07",
+    "ssrf_realtime/model.py:Spin1Model._compute_display_calibration": "408a649e9a1b9359d2a5490a40124bc47a3bd9040d6774252a059f29297eb478",
+    "ssrf_realtime/model.py:Spin1Model.set_params": "e60d483bc6a51de6960d004617addebebb699ed4959e3053353f1ffbd2532d03",
+    "ssrf_realtime/model.py:Spin1Model.as_dict": "e5e7d6bcfcbc9c2c5b0f368b1b0dd525eed1dca556f7d84dfc5b78723a927413",
+    "ssrf_realtime/model.py:Spin1Model.set_rf_enabled": "6312cce11be23689654d52c41a0548d0b248817afd590abace492c61fb0ada9b",
+    "ssrf_realtime/model.py:Spin1Model.set_dnp_enabled": "a28dafb46e6a97dd3f6ec1f5f6361610dbba02a00dd4456ba24c3bda0d8abe6d",
+    "ssrf_realtime/model.py:Spin1Model.set_diffusion_enabled": "00ab8e829dfe73e6dc93373bd312c0e69af511e0f9e49abbfd15078f97059c36",
+    "ssrf_realtime/model.py:Spin1Model.equilibrium_reference": "6eac26b42c9663a85398b89c3d7a849425581a9552dbf05916ad3d32b76f80f6",
+    "ssrf_realtime/model.py:Spin1Model.polarizations": "31425e4f19e745d1998b07ad5155f653113e5733becb3d752ad94615e01efde5",
+    "ssrf_realtime/model.py:Spin1Model.branch_areas": "e91c253384a9baf2dd8d1ac3c7a708805c978cd52e0f57e97e29ed9005bfc85b",
+    "ssrf_realtime/model.py:Spin1Model.branch_indices": "9458bb89857b5e3eb5bb7c4863f705ade2fe286e611c3b9e60b2a5eea038e158",
+    "ssrf_realtime/model.py:Spin1Model._rf_profile_key": "c37a52e31e098bd459f2f908cf617c246a982f6a98b3d9645a34b80515130beb",
+    "ssrf_realtime/model.py:Spin1Model.invalidate_rf_profile": "d77722eba6af5c49cdd4a4bda7a89d3b063ca3fd05afe5abdef97d08c784585f",
+    "ssrf_realtime/model.py:Spin1Model.rf_profile_physical": "519b060715bda94704d17f98e3039cbb3d3c603f6781d46305cb73ad817ebe72",
+    "ssrf_realtime/model.py:Spin1Model.rf_profile_arrays": "86221f2ad7d31a730e9f3a7730a4f749be8fb2898917d4b3003d79031423289e",
+    "ssrf_realtime/model.py:Spin1Model.rf_profile_summary": "3402a90f85f40e843a00ad100de348b91074170dda560a4bfcefe4f3d4f40d12",
+    "ssrf_realtime/model.py:Spin1Model.rf_rate_fields": "b3790a4224ba831938d3fb6f7d2d871713e357f77e6ddfe94780daeae9420d3a",
+    "ssrf_realtime/model.py:Spin1Model._rf_population_term": "c198b7ae84867372c82946e0b54cb54e434fa15ac88fff2f9c6a7865b3d6de59",
+    "ssrf_realtime/model.py:Spin1Model._transition_differences": "708d6956b1a00cc47ed3ba8ee36c9ac00f828c2f6db3427624f1486f7cf2c9f8",
+    "ssrf_realtime/model.py:Spin1Model.packet_intensities": "9dc65e16e4a689f83411fec6e56d4c8a754edb8fa6dd3e402568ac31f690d0d9",
+    "ssrf_realtime/model.py:Spin1Model.local_intensities": "9831ebe42a372551f195403bfe975a25f23427cc912d6d06c8492f5de9920a1a",
+    "ssrf_realtime/model.py:Spin1Model.pair_intensities": "e21d46d2780e1eaff33eb8b711fa2e4ee5860e4bf212e24964f1dcfe15da4258",
+    "ssrf_realtime/model.py:Spin1Model.response_values": "d10f4fc82dbfa33f6b7caa813d27fbd0154aba2986e992b7c25be2919a8f725d",
+    "ssrf_realtime/model.py:Spin1Model.spectrum_from_state": "5d7330c8ea949bd9d991d42fa794d1bab2c2489e95c7bb0318ad065691abc209",
+    "ssrf_realtime/model.py:Spin1Model.spectrum": "121949f18e5ad1fae95f9c83dfb71bff5d2f9e1af7b2b8457742d3126c620782",
+    "ssrf_realtime/model.py:Spin1Model.reference_spectrum": "59ca54c413c29835719d2802457909841eced328cd15552e2bdaad63401fbe90",
+    "ssrf_realtime/model.py:Spin1Model.static_plot_signal_reference": "92deb508f17e1e44b4f556d76ff67e3f1fd57861716bda45bdad1b911d611327",
+    "ssrf_realtime/model.py:Spin1Model.capacity_rate_weights": "b6854b30bdc084cdfcad3629426927b50e7ec628586aff3de8ade40deb121cc8",
+    "ssrf_realtime/model.py:Spin1Model.local_capacity_factors": "194b72d463da7d669ffdd622a764e21749164d802bfee740e6ebbace357fcda3",
+    "ssrf_realtime/model.py:Spin1Model.effective_local_rates": "904b29689fbdd8fb7aaee6308a089f5f2506ecc32743d5cbde49ea58d87a5bfb",
+    "ssrf_realtime/model.py:Spin1Model.packet_spectrum": "32a50bca2603ecf825873dc71c03c3b2dc298377ce50e54f8167784398606c97",
+    "ssrf_realtime/model.py:Spin1Model._effective_theta": "8aa2e4fb1f331eda60db05c9240caca3ec1bebacfc6f1b063fede1d72766553f",
+    "ssrf_realtime/model.py:Spin1Model._orientation_factor": "0e6df28a413fb5b84469fd4f01fb10b7147d316d87a6b704c7e701501cc9cdb4",
+    "ssrf_realtime/model.py:Spin1Model.step": "c3292b7b3d6afd47cf4429bef654a7e32e7c2104750003174afdfcae3afa0cb5",
+    "ssrf_realtime/model.py:Spin1Model.rf_balance_estimate": "4829d00ea1a806434f6dee158adb9ef54c883c4a2d2c9096d3f91e1ee9aa5758",
+    "ssrf_realtime/model.py:Spin1Model.branch_ratio": "8a92f1febd40a9d777864ac6d97151a863b23d17edbd2d6635b16c075cf24ca3",
+    "ssrf_realtime/model.py:Spin1Model.initial_branch_ratio": "3f7def58dd0f75f056408f0b531709f9265236c33c00af923b4eb182c903acb1",
+    "ssrf_realtime/ideal_model.py:IdealBinModel.__init__": "cd5def8a988f657a9958d0797dc34376a6018d19cb513740de816c860fd76ee0",
+    "ssrf_realtime/ideal_model.py:IdealBinModel.reset": "8fa9ba1de65c9cc1e30e6710d0100e7a0d5b79008fc126b93b09c318d774f1f7",
+    "ssrf_realtime/ideal_model.py:IdealBinModel.set_program": "9f5935a281b86afa5b28a47b3ffe00b6feaa0e5e4ef11a93dbd001e52bb1118d",
+    "ssrf_realtime/ideal_model.py:IdealBinModel.set_program_gain": "5a4e88c5a52478ec49efde9b4f14df73167fc862da7a058a9d280c86ef008eac",
+    "ssrf_realtime/ideal_model.py:IdealBinModel.start_program": "b592ca9e2d5b2279d7f41f40f9a0089b2e40a7a989cbb7ac8905d70dfdaa4cd7",
+    "ssrf_realtime/ideal_model.py:IdealBinModel.stop_program": "00b98bf6c3fcaf40b8b607a23fac5af90114796489beab7fce9d2786caa8939f",
+    "ssrf_realtime/ideal_model.py:IdealBinModel.program_elapsed": "01c0b3117f96baa0c4f95665ef22466681d39920de0c2a27d32ec62bd50c7e0e",
+    "ssrf_realtime/ideal_model.py:IdealBinModel.program_state": "985717490fe76350f8c29a42dbff0dca94c8f2eea6505d66a39f6e3f2accbca6",
+    "ssrf_realtime/ideal_model.py:IdealBinModel._interval_index": "28657091cc6df04a8a5c10c3bb6511c5042d374b9982aa602596af248624e19e",
+    "ssrf_realtime/ideal_model.py:IdealBinModel.commanded_rf_field": "94409c37441b7c287f816b92f630a0cadf590ac76978b79d16776f8ab0f61001",
+    "ssrf_realtime/ideal_model.py:IdealBinModel.applied_rf_field": "76143b80ab65d9175c71063d07d2ee48bb803e0d89189ed37a02d797363339e3",
+    "ssrf_realtime/ideal_model.py:IdealBinModel.preview_rf_field": "e929298d4c18f320d759ff717e5ebd1fe83a68d4eb4dc2a6a545804fd88ea565",
+    "ssrf_realtime/ideal_model.py:IdealBinModel.rf_profile_physical": "cf3dd41ad154f1e7263d3f5602672eef7479516f5cf760d1b965f4023ac587ad",
+    "ssrf_realtime/ideal_model.py:IdealBinModel.rf_profile_arrays": "4f3b284e1a484e62bf107010b967d7f9ad6f5579f0b04a592c028e2d6721acee",
+    "ssrf_realtime/ideal_model.py:IdealBinModel.rf_rate_fields": "4f25ed0c66c65ff18ac926786e8026e985bb9efc66aeb909643ac10e831ff4ee",
+    "ssrf_realtime/ideal_model.py:IdealBinModel.rf_profile_summary": "beb97fbb5f81c8be97574694f46555e9560f5f3de7080a0d726056663c5732f4",
+    "ssrf_realtime/ideal_model.py:IdealBinModel.effective_local_rates": "21d826fee70aaa6fcdad21aa37f0dc6e7f9a6c823eaf436f000223cbdfc9c5e8",
+    "ssrf_realtime/ideal_model.py:IdealBinModel.rf_balance_estimate": "a5029b81d34e7e301854c62c6835e53e4c78b4f9cd2ac70a632b15b6d4b11e6e",
+    "ssrf_realtime/ideal_model.py:IdealBinModel.step": "42c0b85596399a0d4f073f0634db70f48ac280ae48fcd796089a21655f3c07be"
+  },
+  "unchanged_python": {
+    "ssrf_realtime/profile_editor.py": "1da5d5199a9d4f7f242a78d0042f5f57623550e327edf2d6c72d08fb6f698811",
+    "ssrf_realtime/__init__.py": "1af6cf6942a0cbcee9de219588956c51fe39439de13149ea8b5f7c08dc3867bc",
+    "ssrf_realtime/numeric_dialogs.py": "20d618a7ac884ba03e1b02746bb33abeeacd5c8601b777a951749b97caa7348e",
+    "ssrf_realtime/safe_widgets.py": "38e60cf6499bdcd3945d48cefb6e814c2669bbb6b90504572a5acce24f8ce7db",
+    "ssrf_realtime/profile_editing.py": "1ddaba01843f9fb6738e0a82ad0277ce33577e990f384906045d4a5776467d83",
+    "ssrf_realtime/lineshape.py": "9eefec4bd5a015275f86b46c9ed7046c00e882471ecc28f3ba9dd8bda53857a1",
+    "ssrf_realtime/rf_profile.py": "52747e21865e4bc66dfebc397e675f9e782f83cc5bf978a674c61b47f9916971",
+    "ssrf_realtime/pulse_program.py": "1a2a39e1a92ea060656e792076ceafc2fc5c12d3d1492ef312798c1f5a97c55f"
+  },
+  "changed_python": {
+    "ssrf_realtime/model.py": {
+      "before": "00b63896a3eb2e180592e358062a533574d6a0fd06ea16da1fc3a1d630647b74",
+      "after": "77a36ac49a3d5d15cb0523ea1c033a5209270a026b5f9c367f442b2d4b767c1c"
+    },
+    "ssrf_realtime/gui.py": {
+      "before": "f4e70f3fc0675795fdf57c3a5bd6f0db4ca8d8ec9ff3aa86c11c82a1489adc67",
+      "after": "671c45ca220dcb3dc1c1e94071b436f35a6b0c6fdfc5423af510aced9bf5bf53"
+    },
+    "ssrf_realtime/ideal_model.py": {
+      "before": "6b7f5782c9e6efa8eb1f5ba4fa3ecd2feb2cf38bfd56d770e743de132cefd71b",
+      "after": "bc817440126bb08d4f4aea67bb3ea9cbacf67cd40128e423c8fa6e7bda52563c"
+    },
+    "ssrf_realtime/baseline_gui.py": {
+      "before": "bcf7240bc5581f85ada202650e5d4c7a7b43f97e0a372c2445964c21f08eae80",
+      "after": "2d6e3b217112b5b4674fab551c91138164d100b87e3acfabb0bf03f51b88e7e3"
+    }
+  }
+}

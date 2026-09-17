@@ -1,0 +1,10 @@
+{
+  "source_archive": "spin1_ssrf_realtime_ideal_profiles.zip",
+  "source_archive_sha256": "b6f9be4332355442c24a62ec707e86a68f47f3677d1ab371bd73a5d2a6c7abc7",
+  "unchanged_core_sha256": {
+    "ssrf_realtime/pulse_program.py": "1a2a39e1a92ea060656e792076ceafc2fc5c12d3d1492ef312798c1f5a97c55f",
+    "ssrf_realtime/lineshape.py": "9eefec4bd5a015275f86b46c9ed7046c00e882471ecc28f3ba9dd8bda53857a1",
+    "ssrf_realtime/rf_profile.py": "52747e21865e4bc66dfebc397e675f9e782f83cc5bf978a674c61b47f9916971"
+  },
+  "revision_note": "Recovery was explicitly revised. Only genuinely byte-identical files remain in this hash list. See RECOVERY_SOURCE_MANIFEST.json."
+}

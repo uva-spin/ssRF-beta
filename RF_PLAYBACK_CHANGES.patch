@@ -1,0 +1,337 @@
+--- a/ssrf_realtime/designer_gui.py
++++ b/ssrf_realtime/designer_gui.py
+@@ -148,7 +148,7 @@
+         self.table.setEditTriggers(triggers)
+         self.tabs.addTab(self.table,'Generated bin commands')
+         layout.addWidget(self.tabs,1)
+-        self.summary=label('No calculation yet. Generating never applies RF.'); layout.addWidget(self.summary)
++        self.summary=label('No calculation yet. Generating never applies RF. Load the result, then click RF ON.'); layout.addWidget(self.summary)
+         actions=QtWidgets.QHBoxLayout()
+         self.install_button=QtWidgets.QPushButton('Load generated program (do not run)'); self.install_button.setEnabled(False)
+         self.install_button.clicked.connect(self._install)
+@@ -265,7 +265,7 @@
+         self.material_description='Editable demonstration values; not a calibrated material.'
+         self.material_path=None
+         super().__init__(params)
+-        self.setWindowTitle('Real-time ss-RF — material library / synchronized tensor designer')
++        self.setWindowTitle('Real-time ss-RF — tensor designer / RF playback fix')
+ 
+     def _spin_box(self,label_text,value,lo,hi,step,decimals,callback):
+         # Values loaded from a config must not be visually clipped to an old GUI range.
+@@ -415,7 +415,10 @@
+                     self.dt_box.setMinimum(min(self.dt_box.minimum(),dt));self.dt_box.setValue(dt)
+                     self.dt_box.blockSignals(False)
+                 self._apply_program(d.result.program)
+-                self.material_label.setText(f'{self.material_name}\nGenerated program loaded; press Start explicitly.')
++                self.pause_at_end_box.setChecked(True)
++                self.material_label.setText(
++                    f'{self.material_name}\nProgram READY; press RF ON to apply. '
++                    'Pauses at the endpoint so you can inspect the enhancement.')
+ 
+ 
+ def main(argv=None):
+--- a/ssrf_realtime/gui.py
++++ b/ssrf_realtime/gui.py
+@@ -10,6 +10,7 @@
+ from .ideal_model import IdealBinModel, IdealBinParams
+ from .model import Spin1Params
+ from .pulse_program import PulseProgram
++from .playback import PulsePlaybackController
+ from .profile_editor import ProfileEditor, blocked
+ from .safe_widgets import ArrowDoubleSpinBox, ArrowSpinBox, NoWheelComboBox
+ from .profile_editing import nearest_bin
+@@ -109,11 +110,18 @@
+         layout.addLayout(row)
+         self.edit_button = QtWidgets.QPushButton("Edit EVERY bin: power / start / duration")
+         self.edit_button.clicked.connect(self._edit_program)
+-        self.start_button = QtWidgets.QPushButton("Start / restart program")
++        self.start_button = QtWidgets.QPushButton("Start / restart RF program")
+         self.start_button.clicked.connect(self._start_program)
+         self.stop_button = QtWidgets.QPushButton("Stop program (keep evolving)")
+         self.stop_button.clicked.connect(self._stop_program)
+         for b in (self.edit_button, self.start_button, self.stop_button): layout.addWidget(b)
++        self.pause_at_end_box = QtWidgets.QCheckBox("Pause at program end")
++        self.pause_at_end_box.setChecked(bool(getattr(self, "pause_at_program_end", False)))
++        self.pause_at_end_box.setToolTip(
++            "Hold the populations exactly at the final pulse endpoint. "
++            "Run simulation then continues RF-off recovery. No populations are reset.")
++        self.pause_at_end_box.toggled.connect(self._set_pause_at_end)
++        layout.addWidget(self.pause_at_end_box)
+         io = QtWidgets.QHBoxLayout()
+         for text, fun in (("Load program",self._load_program),("Save program",self._save_program)):
+             b = QtWidgets.QPushButton(text); b.clicked.connect(fun); io.addWidget(b)
+@@ -137,7 +145,8 @@
+         hint = QtWidgets.QLabel(
+             "RF positions come from the pulse-table bins, not M. "
+             "L/R show the configured extent of the selected profile. "
+-            "Start times are relative to Start program. RF OFF mutes RF while "
++            "RF ON starts a READY or FINISHED program at program t=0. "
++            "During a run, RF OFF mutes RF while "
+             "the schedule advances; Pause freezes both. Recovery continues after pulses end."
+         )
+         hint.setWordWrap(True); hint.setStyleSheet("font-size: 10px;")
+@@ -260,26 +269,73 @@
+         except ValueError as exc:
+             QtWidgets.QMessageBox.warning(self,"RF gain",str(exc))
+ 
++    def _set_pause_at_end(self, checked):
++        self.pause_at_program_end = bool(checked)
++
++    def _update_rf_button(self):
++        # This is also called while the inherited controls are being built.
++        controller = PulsePlaybackController(self.model)
++        self.rf_button.setText(controller.button_text(paused=getattr(self, "paused", False)))
++        self.rf_button.setStyleSheet("font-weight: bold; padding: 6px;")
++        self.rf_button.setToolTip(
++            "Click to start/replay a loaded program, or unmute a running program. "
++            "Loading alone does not apply RF. RF OFF mutes an active schedule; "
++            "Pause simulation freezes its clock.")
++
++    def _sync_rf_button(self):
++        # Qt setChecked emits toggled, so synchronization must not initiate
++        # another run. Only the explicit user action starts the program.
++        with blocked(self.rf_button):
++            self.rf_button.setChecked(bool(self.model.params.rf_enabled))
++        self._update_rf_button()
++
++    def _toggle_rf(self, checked):
++        controller = PulsePlaybackController(self.model)
++        try:
++            if checked:
++                action = controller.rf_on()
++                self.paused = False
++                self.pause_button.setText("Pause simulation")
++                if action in ("started", "restarted"):
++                    self._start_new_trace(record_now=True)
++            else:
++                controller.rf_off()
++            self._sync_rf_button()
++            self._record_trace_point()
++            self._update_plots()
++        except (ValueError, FloatingPointError, RuntimeError) as exc:
++            controller.rf_off()
++            self._sync_rf_button()
++            self._update_plots()
++            QtWidgets.QMessageBox.warning(self, "RF not started", str(exc))
++
+     def _start_program(self):
+         try:
+-            self.model.start_program()
+-            self.rf_button.setChecked(True)
++            PulsePlaybackController(self.model).restart()
++            self._sync_rf_button()
+             self.paused = False
+             self.pause_button.setText("Pause simulation")
+             self._start_new_trace(record_now=True)
+             self._update_plots()
+         except ValueError as exc:
+-            QtWidgets.QMessageBox.warning(self,"RF program",str(exc))
++            self.model.set_rf_enabled(False)
++            self._sync_rf_button()
++            QtWidgets.QMessageBox.warning(self, "RF program", str(exc))
+ 
+     def _stop_program(self):
+         self.model.stop_program()
+-        self.rf_button.setChecked(False)
++        self._sync_rf_button()
++        self._update_plots()
++
++    def _toggle_pause(self):
++        self.paused = not self.paused
++        self.pause_button.setText("Run simulation" if self.paused else "Pause simulation")
+         self._update_plots()
+ 
+     def _apply_program(self, program):
+         self.model.set_program(program)
+         self._refresh_profile_picker()
+-        self.rf_button.setChecked(False)
++        self._sync_rf_button()
+         with blocked(self.gain_box): self.gain_box.setValue(self.model.program.gain)
+         self._update_plots()
+ 
+@@ -359,14 +415,21 @@
+             if not self.paused:
+                 self.model.set_rf_enabled(self.rf_is_on())
+                 self.model.set_dnp_enabled(self.dnp_is_on())
+-                self.model.step(n_steps=self.steps_per_tick)
++                update = PulsePlaybackController(self.model).advance(
++                    n_steps=self.steps_per_tick,
++                    pause_at_end=bool(getattr(self, "pause_at_program_end", False)))
++                if update.pause_requested:
++                    self.paused = True
++                    self.pause_button.setText("Run simulation (continue recovery)")
++                if update.completed:
++                    self._sync_rf_button()
+                 self._record_trace_point()
+             self._update_plots()
+         except (ValueError,FloatingPointError,RuntimeError) as exc:
+-            self.paused=True
++            self.paused = True
+             self.pause_button.setText("Run simulation")
+             self.model.stop_program()
+-            self.rf_button.setChecked(False)
++            self._sync_rf_button()
+             QtWidgets.QMessageBox.critical(self,"Simulation stopped safely",str(exc))
+ 
+     def _update_plots(self):
+@@ -403,14 +466,11 @@
+         pol=self.model.polarizations()
+         self.p_readout.setText(f"P(t) = {pol['P']:+.5f}   ({100*pol['P']:+.2f}%)")
+         self.q_readout.setText(f"Q(t)={pol['Q']:+.5f}     Q_B[P]={pol['Q_boltz_at_P']:+.5f}")
+-        active=self.model.applied_rf_field()
+-        state=self.model.program_state
+-        gate="ON" if self.rf_is_on() else "OFF"
+-        self.program_label.setText(
+-            f"Program: {state.upper()}   RF gate {gate}\n"
+-            f"Program t={self.model.program_elapsed:.4f} / {self.model._compiled.end_time:.4f}\n"
+-            f"{np.count_nonzero(active)} bins receiving RF; global gain={self.model.program.gain:g}"
+-        )
++        self._sync_rf_button()
++        playback = PulsePlaybackController(self.model)
++        status = playback.status_text(paused=self.paused)
++        self.program_label.setText(status)
++        self.statusBar().showMessage(status.replace("\n", "  |  "))
+         rates=self.model.effective_local_rates()
+         diff=self.model.local_diffusion_diagnostics(dnp_on=self.dnp_is_on())
+         eq=self.model.recovery_equilibrium_diagnostics()
+--- a/ssrf_realtime/playback.py
++++ b/ssrf_realtime/playback.py
+@@ -0,0 +1,138 @@
++"""RF-button orchestration on the existing, unmodified pulse scheduler.
++
++There are two distinct backend conditions: an enabled RF gate AND a started
++program.  The main RF ON action must arrange both.  File loading must arrange
++neither.  This module contains no population equations or pulse optimization.
++It is independent of Qt so the exact playback path can be tested headlessly.
++"""
++from __future__ import annotations
++
++from dataclasses import dataclass
++import math
++import numpy as np
++
++
++@dataclass(frozen=True)
++class PlaybackUpdate:
++    completed: bool = False
++    pause_requested: bool = False
++
++
++class PulsePlaybackController:
++    """Explicit start/replay, RF mute, completion and optional endpoint hold."""
++
++    def __init__(self, model):
++        self.model = model
++
++    def _validate_start(self) -> None:
++        preview = self.model.preview_rf_field()
++        if self.model.program.gain <= 0:
++            raise ValueError("Global RF gain is zero. Set it above zero before starting RF.")
++        if (self.model._compiled.end_time <= 0 or not np.all(np.isfinite(preview))
++                or not np.any(preview > 0)):
++            raise ValueError("No enabled pulses with positive power and duration. "
++                             "Load a program or enable pulse rows in the per-bin editor.")
++
++    def rf_on(self) -> str:
++        """Start a ready program, replay a finished one, or unmute an active one.
++
++        The start epoch is the CURRENT simulation time, never absolute time 0.
++        Replaying does not restore the population snapshot or reset P/Q.
++        """
++        self._validate_start()
++        state = self.model.program_state
++        if state in ("ready", "stopped", "finished"):
++            self.model.start_program(turn_rf_on=True)
++            return "started" if state == "ready" else "restarted"
++        self.model.set_rf_enabled(True)
++        return "resumed"
++
++    def restart(self) -> str:
++        self._validate_start()
++        self.model.start_program(turn_rf_on=True)
++        return "restarted"
++
++    def rf_off(self) -> None:
++        # Preserve historical mute behavior: the schedule advances if the
++        # simulation keeps running. The separate Pause control freezes both.
++        self.model.set_rf_enabled(False)
++
++    def advance(self, n_steps: int, *, dnp_on=None,
++                pause_at_end: bool = False) -> PlaybackUpdate:
++        """Advance with the existing model.step; optionally stop at the endpoint.
++
++        A short program can otherwise finish AND recover before the next GUI
++        redraw. Endpoint hold captures n(T), without changing any pulse or
++        physical coefficient. It shortens only the final numerical step.
++        """
++        if isinstance(n_steps, bool) or int(n_steps) != n_steps or n_steps < 1:
++            raise ValueError("n_steps must be a positive integer")
++        n_steps = int(n_steps)
++        m = self.model
++        prior = m.program_state
++        active_schedule = prior in ("running", "waiting")
++        endpoint = (float(m._event_times_absolute[-1])
++                    if active_schedule else None)
++        dt = float(m.params.dt)
++        if not math.isfinite(dt) or dt <= 0:
++            raise ValueError("dt must be finite and positive")
++        # Far from the endpoint, retain exactly the original stepping path.
++        if (pause_at_end and active_schedule
++                and endpoint - m.t <= n_steps * dt + 8 * math.ulp(endpoint)):
++            for _ in range(n_steps):
++                remaining = endpoint - m.t
++                if remaining <= 0:
++                    break
++                try:
++                    m.params.dt = min(dt, remaining)
++                    m.step(n_steps=1, dnp_on=dnp_on)
++                finally:
++                    m.params.dt = dt
++        else:
++            m.step(n_steps=n_steps, dnp_on=dnp_on)
++        completed = active_schedule and m.program_state == "finished"
++        if completed:
++            # Do not leave a misleading RF ON indicator after a one-shot pulse.
++            # Retain the schedule, epoch and exposure receipt for inspection.
++            m.set_rf_enabled(False)
++        return PlaybackUpdate(completed=completed,
++                              pause_requested=bool(completed and pause_at_end))
++
++    def button_text(self, *, paused=False) -> str:
++        state = self.model.program_state
++        if self.model.params.rf_enabled:
++            if paused:
++                return "RF ON — simulation paused"
++            if state == "waiting":
++                return "RF ARMED — waiting for pulse"
++            return "RF ON — program running"
++        if state == "finished":
++            return "RF OFF — finished (click to replay)"
++        if state in ("ready", "stopped"):
++            return "RF OFF — click to start program"
++        return "RF OFF — muted (click to resume)"
++
++    def status_text(self, *, paused=False) -> str:
++        m = self.model
++        phase = m.program_state
++        actual = m.applied_rf_field()
++        count = int(np.count_nonzero(actual))
++        exposed = int(np.count_nonzero(m.delivered_exposure > 0))
++        if phase in ("ready", "stopped"):
++            description = ("READY — press RF ON to start the loaded program"
++                           if phase == "ready" else
++                           "STOPPED — press RF ON to replay the loaded program")
++        elif phase == "finished":
++            description = "FINISHED — RF OFF; click RF ON to replay"
++        elif not m.params.rf_enabled:
++            description = "MUTED — schedule still advances unless simulation is paused"
++        elif phase == "waiting":
++            description = "WAITING — RF enabled; no pulse is scheduled at this instant"
++        else:
++            description = "RUNNING — pulse commands enabled"
++        suffix = " [simulation paused]" if paused else ""
++        return (f"{description}{suffix}\n"
++                f"Program t={m.program_elapsed:.6g} / {m._compiled.end_time:.6g}\n"
++                f"{count} bins commanded now; peak U={float(np.max(actual)):.6g}\n"
++                f"Delivered this run: {exposed} bins; sum(U dt)="
++                f"{float(np.sum(m.delivered_exposure)):.6g}")

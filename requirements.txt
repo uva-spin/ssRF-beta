@@ -1,0 +1,3 @@
+-r requirements-core.txt
+PyQt6>=6.5,<7
+# Alternatively install requirements-core.txt and PySide6 or PyQt5.

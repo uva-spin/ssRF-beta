@@ -1,0 +1,38 @@
+{
+  "schema": "ssrf-ideal-bin-program-1",
+  "units": "simulation_time_and_base_RF_rate",
+  "overlap": "add",
+  "n_bins": 701,
+  "r_min": -3.0,
+  "r_max": 3.0,
+  "gain": 1.0,
+  "profiles": [
+    {
+      "name": "Custom per-bin example",
+      "enabled": true,
+      "pulses": [
+        {
+          "bin_index": 240,
+          "rate": 1.35,
+          "start": 0.0,
+          "duration": 0.25,
+          "enabled": true
+        },
+        {
+          "bin_index": 241,
+          "rate": 2.1,
+          "start": 0.0,
+          "duration": 0.4,
+          "enabled": true
+        },
+        {
+          "bin_index": 242,
+          "rate": 0.8,
+          "start": 0.1,
+          "duration": 0.3,
+          "enabled": true
+        }
+      ]
+    }
+  ]
+}
