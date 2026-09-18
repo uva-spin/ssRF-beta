@@ -1,4 +1,4 @@
-# Real-time ss-RF: tensor designer with live tensor spectrum and mirror traces
+# Real-time ss-RF: tensor manipulation and optimizer
 
 This is a display-only update of the working RF-playback-corrected package.
 The main window now has three stacked live plots:
