@@ -1,259 +1,166 @@
-# Real-time ss-RF: tensor manipulation and optimizer
+# ssRF — spin-1 selective-RF tensor-polarization simulator
 
-This is a display-only update of the working RF-playback-corrected package.
-The main window now has three stacked live plots:
+ssRF simulates the level populations of deuterons (spin-1 nuclei) in a dynamically polarized
+solid target, such as deuterated butanol or ND₃ at 1 K and 5 T. It shows how radio-frequency
+(RF) manipulation changes the vector polarization **P** and the tensor polarization **Q**, and
+it designs RF programs that maximize Q from a given starting state.
 
-1. **Top:** I+(R), I-(R), and their sum, with the existing monitor/profile markers
-   and planned/active RF commands on the right axis.
-2. **Middle:** the signed **I+(R) - I-(R)** tensor spectrum, over the same physical-R
-   domain as the top plot. A zero line identifies negative/positive regions. The
-   monitor M and mirror -M markers follow the same locations in both panels.
-3. **Bottom:** absolute intensities versus time at M and -M. Direct I+(M,t) and
-   I-(M,t) remain solid. **I+(-M,t) is dotted blue; I-(-M,t) is dotted yellow**
-   (a dark golden yellow for visibility on white). No sum or normalization is added.
+## What it does
 
-The main window retains its compact 1000 x 555 default and scrollable controls.
-The common frequency-axis label is under the middle plot to avoid duplicate
-labels in the compact layout. The lower axis is time, not physical frequency.
+The spectrum is a powder Pake doublet. Every frequency packet holds the populations of its
+three levels (m = +1, 0, −1), and these evolve under:
 
-All four monitor histories are recorded together from the evolving populations,
-including the initial sample. Moving M resets all four to their values at the
-new M/-M locations; it does not move RF pulses. Restarting the trace, resetting
-populations, or loading a material/state clears all four histories consistently.
-RF-off recovery continues updating them unless the simulation is paused.
-
-The middle curve is the literal displayed spectral subtraction, not Q(P), a
-Boltzmann fit, a change from a reference, or a local intensity ratio. The separate
-live Q readout remains the integrated population-derived tensor polarization.
-The top sum and middle difference reuse a single sampled spectrum each refresh,
-so they are also consistent when display-only noise is enabled. The time traces
-remain noise-free population observables, as the previous direct traces were.
-
-Trace CSV export retains its original first five columns and appends
-`mirror_R`, `Iplus_mirror`, and `Iminus_mirror`. Material, snapshot and RF-program
-file formats are unchanged.
-
-**The corrected RF ON start/replay behavior and Pause at program end are retained.**
-No population equation, recovery parameter, pulse scheduler, RF command, DNP/T1
-source, optimizer or material-file schema was changed. See `DISPLAY_UPDATE.md`
-and `PLAYBACK_FIX.md` for the current display and playback behavior.
-
-## Corrected RF playback workflow
-
-1. Generate a tensor program and click **Load generated program (do not run)**.
-2. Back in the main window, click the RF button labeled **RF OFF — click to start program**.
-   That ONE action starts the loaded program at program time zero, turns RF on,
-   and resumes the simulation. A separate Start click is no longer necessary.
-3. On completion the RF gate returns OFF. Generated programs automatically select
-   **Pause at program end** so the immediate endpoint stays visible.
-4. Press **Run simulation (continue recovery)** to let the post-pulse line recover.
-   Alternatively uncheck **Pause at program end** before a run for uninterrupted evolution.
-
-Running the simulation *before* clicking RF ON is also supported. A READY program
-has no running pulse clock and cannot expire while waiting to be started.
-The main status line shows READY, RUNNING, WAITING, MUTED or FINISHED, current
-program time, active bin count and a delivered-exposure receipt.
-
-RF ON starts or replays a READY, STOPPED or FINISHED program from the current
-simulation time and current populations. During an active run it only unmutes;
-it does not restart the clock. RF OFF during a run still mutes the source while
-the schedule advances. **Pause simulation** freezes both clocks. There is no
-automatic repetition and no implicit restoration of the optimization snapshot.
-
-The same RF-button behavior applies to generic examples and JSON/CSV programs.
-An empty/disabled pulse table or global gain zero now raises a clear warning
-rather than showing an apparently active RF gate. Explicit **Start / restart RF
-program** remains available. Loading any program still supplies zero RF until
-an explicit start action.
-
-Endpoint hold is a session playback choice, not a material kinetic parameter;
-it does not change the existing JSON material or RF-program schemas.
-
-## Install and run
-
-Python 3.9 or newer:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python3 -m pip install -r requirements.txt
-python3 run_app.py
-```
-
-Windows activation: `.venv\Scripts\activate`.
-The existing Qt loader tries PyQt6, PySide6, then PyQt5. For a non-GUI install:
-
-```bash
-python3 -m pip install -r requirements-core.txt
-```
-
-The new entry point is `run_app.py`, which loads `ssrf_realtime.designer_gui`.
-`gui.py` builds the three live panels and retains start/mute/replay and endpoint handling through the unchanged `playback.py`.
-
-## Material configurations
-
-The new panel is **Material configuration / tensor design** in the scrollable
-side panel. Use **Load material**, **Save material**, **Save as...**, or
-**Edit ALL material / search settings...**. The last opens an explicit JSON
-editor, useful for precise values or fields not present in the compact GUI.
-Live spin fields remain arrow-only and ignore mouse-wheel changes.
-
-The provided `materials/default_demo.json` is a complete template, **not a
-calibrated ND3 parameter set**. Duplicate it for each material. Change its
-`name` and `description` as well as the parameter values. Unknown keys, invalid
-population triangles, nonfinite or negative rates, and invalid settings are
-rejected rather than silently accepted or clamped.
-
-The material file groups:
-
-* grid and analytic lineshape;
-* initial P and optional Q (`q0: null` initializes Q from the Boltzmann relation);
-* the retained RF coupling and Pake-density correction parameters;
-* K0, overlap shape/width, cross-branch and DQ strengths, geometry, cutoff and MW factor;
-* DNP saturation and build rate, T1 target and rate, enable flags;
-* numerical step, display calibration and noise;
-* all tensor-search limits, tolerances, regions and optional per-bin power ceilings;
-* GUI steps/tick, trace length, timer interval and window size.
-
-Legacy Voigt fields are also stored for complete parameter round trips, but are
-**unused by the ideal RF program**. Pulse powers, pulse gain, pulse timing and
-profile selection remain in the separate pulse-program JSON/CSV, not in a
-material file. A material is not a runtime checkpoint.
-
-### Applying a file is explicit
-
-Loading or applying material settings stops RF and leaves the simulator paused.
-Choose either:
-
-1. **Keep the current populations and simulation time.** This permits rate,
-   coupling, reservoir, display and numerical changes without erasing a burn.
-   Changed p0/q0 affect the next explicit reset only. A changed grid or static
-   lineshape/capacity is rejected in this mode.
-2. **Reinitialize explicitly.** This rebuilds the state using the file's grid,
-   lineshape and initial P/Q. A compatible planned pulse table is retained;
-   an incompatible grid is not silently remapped.
-
-RF is never armed by loading a file, even if the saved RF flag was on. Click **RF ON** (or **Start / restart RF program**) explicitly when ready.
-
-## Generate a tensor program from the current window
-
-1. Load/tune the material. Set initial P/Q, or manipulate the line as desired.
-   The generator uses the actual population arrays corresponding to the current
-   signal, not the initial P setting, not a fitted equilibrium line and not display noise.
-2. Press **Generate tensor program from CURRENT state...**. The live simulation
-   and any existing schedule are paused; their state is not advanced by the search.
-3. Set the maximum RF command and common-duration search range. The initial
-   defaults are U_max=20, T_min=0.01, T_max=2. They are editable trial search
-   constraints, not measured RF power or time calibrations.
-4. Press **Calculate from captured state**. Inspect progress, predicted endpoint,
-   per-bin powers, P/Q changes, and the no-RF comparison.
-5. Use **Export JSON / CSV + snapshot...** to write an independent design bundle.
-   Or use **Load generated program (do not run)** to put it into the existing
-   manual pulse editor. No population or spectrum is overwritten by installation.
-6. Back in the main window, click **RF ON** to start and apply it. The simulation
-   resumes automatically. At the endpoint it pauses for inspection by default.
-7. Press **Run simulation (continue recovery)** to resume RF-off evolution.
-
-The generator uses the current DNP, diffusion and T1 settings throughout the
-prediction. It **maximizes positive Q for either sign of P**. The signed
-subtraction I+ - I- does not reverse its definition for negative P.
-
-### Numerical validation and playback dt
-
-The selected program is replayed through the unchanged `IdealBinModel`, then
-checked against a smaller integration step. If needed, verification halves the
-playback dt; it does not change pulse powers, pulse duration, material rates, or
-population equations. The validated dt is shown in the result and recorded as
-`recommended_playback_dt` in the report. **Loading a generated program from the
-designer applies this smaller numerical dt**, if one was needed. The current
-live populations remain unchanged. For later JSON/CSV loading or command-line
-replay, use the report's dt; `design_tensor.py --replay` does this automatically.
-
-A failed time-step check blocks installation but still permits export for diagnosis.
-
-### What is optimized and what is not
-
-The allowed control is one constant command U_j at each selected physical bin,
-all acting on [0,T), with 0 <= U_j <= U_max,j. Both overlapping absorption
-components receive the same physical-bin command. Existing packet-coupling
-weights remain in effect. U is an effective base equalization-rate scale, **not
-calibrated watts**; times and R are the existing simulation units.
-
-The candidate selector defaults to the union of negative signed subtraction
-and a positive initial RF tensor slope. A subtraction-only mask, slope-only
-mask, or all-bin search is also available. Advanced settings can restrict R
-regions or set individual bin ceilings. Bins outside the mask remain off.
-
-Power optimization uses the complete coupled population dynamics. It does not
-assign a mirror gain, force all local subtractions positive, reset the state to
-Boltzmann, or impose a Voigt hole. For each trial duration, bounded local searches
-adjust the bin powers. Among the completed candidates, the shortest endpoint
-within the specified tolerance of the best Q found is selected. The report lists
-unconverged starts, boundary choices, budget limits and numerical checks.
-
-**This is a finite, bounded local search, not a proof of a global maximum or
-of the globally shortest possible pulse.** Search limits and available
-mechanisms determine what can be found. Longer, stronger or different pulse
-families are not silently considered. No-RF predictions distinguish RF benefit
-from ordinary DNP buildup or tensor equilibration.
-
-The optimization can take seconds to minutes depending on bin count, rate
-stiffness, duration range and search settings. It runs in a cancellable worker;
-the main live state remains frozen. The wall-time budget covers the search;
-endpoint validation is performed afterward and is also cancellable.
-
-## Export contents
-
-Each export creates a **new** `tensor_design[_NN]` directory containing:
-
-| File | Content |
+| Process | What it does |
 |---|---|
-| `rf_program.json` | Existing loadable pulse schema; all active starts 0, duration T, gain 1 |
-| `rf_program.csv` | Existing long-form per-bin pulse table |
-| `material.json` | Source-state material settings and exact search settings |
-| `starting_state.npz` | Current n, reference n, capacities, grid, source settings and fingerprint |
-| `optimization_report.json` | Objective, limits, P/Q prediction, no-RF endpoint, warnings, validated dt |
-| `duration_search.csv` | Every completed trial horizon and search outcome |
-| `bin_diagnostics.csv` | Powers/exposures and initial/final branch intensities for every bin |
-| `predicted_PQ_trace.csv` | Full-model replay through the shared endpoint |
-| `predicted_endpoint.npz` | Final and no-RF population arrays |
+| **ss-RF saturation** | Weak-drive transition rates from any number of RF carriers, with a finite homogeneous linewidth. The I+ and I− transitions at the same frequency belong to different spins. |
+| **AFP** | Instantaneous population inversion over chosen frequency windows. |
+| **Spin diffusion** | Conservative flip-flop exchange: same-branch, cross-branch and double-quantum channels. |
+| **DNP** | Build-up toward a spin-temperature target. |
+| **T1** | Relaxation toward the lattice. |
+| **Optional extras** | Separate C–D and O–D populations, and a nuclear dipolar reservoir (thermal mixing). |
 
-A changed live state requires regeneration. Loading `starting_state.npz`
-explicitly restores that state and its material parameters; it does not restore
-an active pulse or automatically run anything. An arbitrary experimental trace
-is not loaded by this feature: its two branch populations must first be
-reconstructed separately.
+You can:
 
-## Headless use
+- **watch a burn in real time:** spectrum, tensor spectrum (I+ − I−) and time traces, with
+  P and Q read out live;
+- **design the best single RF burn** from the current state, using a gradient-based optimizer
+  with optional power and energy limits;
+- **find the best constant RF while DNP runs** (steady operation), with
+  `tools/steady_state_rf_dnp.py`;
+- **adjust the physics** through material files: line shape, RF coupling and linewidth,
+  diffusion channels, DNP, T1, and per-packet orientation, site and density dependence.
+
+The deuterated-butanol materials are fitted to UVA target data:
+
+| Data | Fit quality |
+|---|---|
+| Line shape | held-out RMS 0.8% |
+| DNP build-up | held-out RMS 0.8% |
+| 0.1 W RF burn and refill | held-out RMSE 3.4×10⁻⁴ |
+
+## Install
+
+Requires Python 3.9 or newer.
 
 ```bash
-# Initialize a saved material and design a program
-python3 design_tensor.py --material materials/default_demo.json --out my_design
-
-# Design from a saved manipulated state
-python3 design_tensor.py --state my_state.npz --out new_design
-
-# Override selected search limits
-python3 design_tensor.py --state my_state.npz --max-power 10 --duration-max 1 --out another_design
-
-# Reproduce the exported endpoint using the exact pulse scheduler
-python3 design_tensor.py --replay my_design
-
-# Start the GUI at a material's initial state, paused
-python3 run_app.py --material materials/default_demo.json
-
-# Start the GUI at an explicit saved state, paused
-python3 run_app.py --state my_state.npz
+git clone https://github.com/uva-spin/ssRF-beta.git
+cd ssRF-beta
+python3 -m venv .venv && source .venv/bin/activate      # optional
+python3 -m pip install -r requirements.txt              # numpy, scipy, matplotlib, PyQt6
 ```
 
-Output directories must be new to avoid overwriting previous designs. State and
-material files with different parameters are not silently combined.
+`requirements-core.txt` installs only the numerical dependencies, for headless use. PySide6 or
+PyQt5 can replace PyQt6.
 
-## Included package
+## Quick start
 
-`TENSOR_DESIGN.md` describes the optimizer and its assumptions.
-`USER_GUIDE.md` contains the detailed manual-profile editing instructions.
-`RECOVERY_MODEL.md`, `DISPLAY_UPDATE.md`, and `PLAYBACK_FIX.md` document the
-current model, display, and RF playback behavior. The package intentionally
-omits development-only tests, provenance archives, patch files, and generated
-output directories.
+```bash
+python3 run_app.py                           # opens d_butanol_matched (default)
+python3 run_app.py d_butanol_basic           # any material by name
+python3 run_app.py --list                    # list the materials
+python3 run_app.py d_butanol_matched --program programs/reference_0p1W_burn.json
+```
+
+The window opens **paused, with RF off**. A typical session:
+
+1. **Design a burn:** **Generate tensor program from CURRENT state…** → **Calculate from
+   captured state** → **Load generated program (do not run)**.
+2. **Run it:** tick **Pause at program end**, press **RF ON**, then **Run simulation**. Q is
+   held at the endpoint.
+3. **Change the physics:** use **RF saturation / spin diffusion…** or **Edit ALL material /
+   search settings…**, then **Save as…** to keep the result.
+
+[docs/USER_GUIDE.md](docs/USER_GUIDE.md) describes every control.
+
+## Materials
+
+All materials start at P = 0.50, where the Boltzmann value is Q₀ = 0.197. The last column is
+the tensor designer's result from that state with no power cap.
+
+| Material | Use it for | Single-burn Q |
+|---|---|---|
+| `d_butanol_matched` | **Default.** Best fit to the measured line shape, DNP build-up and 0.1 W burn/refill. | 0.248 |
+| `d_butanol_basic` | Same fitted physics. Per-spin RF selectivity, which the data do not constrain, set moderately toward the horn transitions (orientation-dependent T₂ plus mild density coupling). | 0.265 |
+| `d_butanol_extend` | Same fitted physics with the selectivity pushed further. An upper-range setting; the reference burn still matches the reported ~80% depletion in 3 s. | 0.275 |
+| `d_butanol_full_physics` | Matched fit plus separate C–D/O–D populations and a nuclear dipolar reservoir. | ≈ 0.248 |
+| `d_butanol_same_branch_transport` | **Hypothesis:** spin diffusion stays within each line (see the limits below). | — |
+| `demo_single_pake` | Generic single-site Pake doublet for teaching. | — |
+
+[docs/MATERIALS.md](docs/MATERIALS.md) gives the fit details, the assumptions behind each
+material and every parameter.
+
+**Power limits.** The materials start with no total-power cap. To apply the experimental
+limits in the tensor designer:
+
+- tick **Limit total RF power** and enter 1, which is 0.1 W under the burn/refill calibration;
+- tick **Limit total RF exposure** and enter 34, which is 3.4 J.
+
+## Continuous DNP + RF (steady operation)
+
+The GUI optimizer designs single burns. For the best **constant** RF while DNP runs:
+
+```bash
+python3 tools/steady_state_rf_dnp.py d_butanol_matched --dnp-target 0.5 --out programs/steady.json
+python3 run_app.py d_butanol_matched --program programs/steady.json
+```
+
+Then turn **DNP ON**, press **RF ON** and **Run**. Q approaches its steady value over a few
+DNP time constants (about 435 s each). With the DNP target at P = 0.50, DNP alone holds
+Q = 0.197:
+
+| Material | Steady Q with the best constant RF |
+|---|---|
+| `d_butanol_matched`, `d_butanol_basic` | 0.202 |
+| `d_butanol_same_branch_transport` | 0.241 (0.277 with 10× `diffusion_scale`) |
+
+## Command line
+
+```bash
+python3 design_tensor.py --material d_butanol_basic --out my_design   # optimize a burn headlessly
+python3 design_tensor.py --replay my_design                           # replay and check it
+python3 tools/plot_tensor_design.py my_design                         # plot the design
+```
+
+## Layout
+
+| Path | Contents |
+|---|---|
+| `run_app.py` | GUI launcher |
+| `design_tensor.py` | Headless tensor designer |
+| `materials/` | The six shipped materials |
+| `programs/reference_0p1W_burn.json` | The 0.1 W, 34 s reference burn |
+| `tools/` | Steady-state RF+DNP optimizer; design plotting |
+| `ssrf_realtime/` | Model, optimizer, extended physics engine, GUI |
+| `docs/` | User guide, materials, physics summary, key results; derivations in `docs/reference/` |
+| `tests/` | 453 tests; legacy materials used as fixtures are in `tests/fixtures/` |
+
+Run the tests with:
+
+```bash
+python3 -m pip install -r requirements-dev.txt
+QT_QPA_PLATFORM=offscreen MPLBACKEND=Agg python3 -m pytest -q --import-mode=importlib
+```
+
+## What the model is, and isn't
+
+It is a population-rate model: incoherent (weak-drive) RF saturation, conservative spin
+diffusion, DNP and T1. The optimizer uses the model's exact adjoint and finds local optima.
+[docs/PHYSICS.md](docs/PHYSICS.md) summarizes the equations.
+
+Known limits:
+
+- **DNP is phenomenological.** One spin-temperature term, with rate and saturation fitted to
+  build-up data. The solid effect, cross effect and thermal mixing are not modelled
+  separately, so there is no dependence on microwave frequency or ESR line.
+- **Transport is weakly identified.** Spin-diffusion parameters, and how strongly flip-flops
+  couple the two overlapping lines (the cross-branch ratio), are not well fixed by data.
+  Spin-1 dipolar matrix elements suggest a cross-branch ratio near 1, which the matched
+  material uses. The same-branch hypothesis would need correlated neighbour orientations.
+- **Per-spin RF selectivity is not identified by data.** It is the difference between the
+  matched, basic and extend materials.
+- **The ~20% RF-on plateau** at the peak, reported experimentally, is not reproduced.
+- **RF calibration** (U ↔ watts, time ↔ seconds) rests on one experiment.
+- **Coherent high-power effects** (nutation, spin locking, finite-adiabaticity AFP) are outside
+  the model; AFP is an idealized instantaneous swap.
+
+[docs/KEY_RESULTS.md](docs/KEY_RESULTS.md) lists which mechanisms move Q, and by how much.

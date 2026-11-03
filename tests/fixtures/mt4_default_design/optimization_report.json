@@ -1,0 +1,148 @@
+{
+  "schema": "ssrf.tensor_design.v1",
+  "status": "completed",
+  "objective": "maximize positive Q at common endpoint; shortest within tolerance",
+  "search_scope": "finite horizon scan + bounded local power optimization (SLSQP with a binding total power/exposure cap, otherwise L-BFGS-B); no global certificate",
+  "snapshot_fingerprint": "3f72d6aa69b3b2ce5707dea43e35051c91ebe5fef29be74e59cba30a203bbfe6",
+  "snapshot_simulation_time": 0.0,
+  "rf_response_mode": "spectral",
+  "rf_saturation": {
+    "rf_spectral_strength": 0.04,
+    "rf_homogeneous_hwhm_R": 0.015
+  },
+  "rf_selectivity": {
+    "rf_peak_selectivity": 0.7,
+    "rf_peak_center_R": 0.96,
+    "rf_peak_half_width_R": 0.16,
+    "rf_transition_width_R": 0.25
+  },
+  "initial": {
+    "P": 0.45000000000000007,
+    "Q": 0.15812595436061372
+  },
+  "final": {
+    "P": 0.4062646243285357,
+    "Q": 0.20559755384293293
+  },
+  "no_RF_at_same_endpoint": {
+    "P": 0.45000000000000007,
+    "Q": 0.15812595436061372
+  },
+  "delta_Q": 0.047471599482319216,
+  "RF_advantage_over_no_RF": 0.047471599482319216,
+  "delta_P": -0.04373537567146435,
+  "common_start": 0.0,
+  "common_duration": 0.01,
+  "active_bins": 133,
+  "candidate_bins": 139,
+  "maximum_command": 18.373924556670723,
+  "integrated_base_exposure": 16.163840328691737,
+  "profile_refinement": {
+    "enabled": true,
+    "requested_fwhm_R": 0.03,
+    "accepted": true,
+    "trials": [
+      {
+        "fwhm_R": 0.03,
+        "unrefined_Q": 0.2056281797305742,
+        "candidate_Q": 0.20559755384293293,
+        "no_RF_Q": 0.15812595436061372,
+        "Q_loss": 3.062588764127239e-05,
+        "allowed_Q_loss": 9.500445073992725e-05,
+        "best_duration_reference_Q": 0.2056281797305742,
+        "global_Q_allowance": 9.500445073992097e-05,
+        "minimum_Q_required": 0.20553317527983428,
+        "roughness": 140.02896844445576,
+        "time_step_stable": true,
+        "accepted": true
+      }
+    ],
+    "unrefined_roughness": 656.0442716507623,
+    "fwhm_R": 0.03,
+    "unrefined_Q": 0.2056281797305742,
+    "candidate_Q": 0.20559755384293293,
+    "no_RF_Q": 0.15812595436061372,
+    "Q_loss": 3.062588764127239e-05,
+    "allowed_Q_loss": 9.500445073992725e-05,
+    "best_duration_reference_Q": 0.2056281797305742,
+    "global_Q_allowance": 9.500445073992097e-05,
+    "minimum_Q_required": 0.20553317527983428,
+    "roughness": 140.02896844445576,
+    "time_step_stable": true,
+    "roughness_reduction_fraction": 0.7865556114191656
+  },
+  "optimization_convergence": {
+    "search_budget_reached": false,
+    "completed_horizons": 1,
+    "all_local_solves_converged": false,
+    "selected_unrefined_first_order_gap": 1.7492058417380363e-07,
+    "meaning": "First-order gap is the maximum feasible linearized Q gain at the raw search solution, not a global-optimality certificate. Endpoint time-step validation is a separate check."
+  },
+  "rf_total_power": {
+    "limit": null,
+    "used": 1616.3840328691738,
+    "satisfied": true,
+    "definition": "sum_j U_j at the synchronized pulse; distinct from T * sum_j U_j"
+  },
+  "rf_exposure_budget": {
+    "limit": null,
+    "used": 16.163840328691737,
+    "scheduled": 16.163840328691734,
+    "remaining": null,
+    "fraction_used": null,
+    "satisfied": true,
+    "definition": "T * sum_j U_j; each physical bin once; AFP excluded"
+  },
+  "best_Q_found_fine_grid": 0.2067495778666594,
+  "near_optimum_Q_tolerance": 9.724724701209136e-05,
+  "time_step_check": {
+    "absolute_Q_difference": 8.099284967977294e-06,
+    "weighted_fraction_RMS_difference": 1.1854839024407736e-05,
+    "estimated_playback_Q_error": 1.6198569935954588e-05,
+    "error_estimate_method": "Twice the full/half-step difference for first-order Euler; asymptotic estimate, not a rigorous bound.",
+    "scheduler_vs_fine_search_Q_difference": 0.0011243439775590058,
+    "allowed_Q_difference": 2e-05
+  },
+  "search_dt_used": 0.000867300417815268,
+  "material_dt": 0.0015,
+  "prediction_step_limit": {
+    "limit": 20000,
+    "required_at_max_duration": 12,
+    "maximum_completed_search_steps": 12,
+    "maximum_completed_endpoint_steps": 12
+  },
+  "recommended_playback_dt": 1.171875e-05,
+  "validation_halvings": 7,
+  "settings": {
+    "max_power": 20.0,
+    "max_total_exposure": null,
+    "max_total_power": null,
+    "profile_smoothing_fwhm_R": 0.03,
+    "min_duration": 0.01,
+    "max_duration": 0.01,
+    "duration_samples": 7,
+    "duration_refinements": 3,
+    "max_iterations": 100,
+    "starts": 2,
+    "search_dt": 0.004,
+    "max_steps": 20000,
+    "max_validation_halvings": 8,
+    "max_wall_seconds": 300.0,
+    "q_absolute_tolerance": 1e-06,
+    "q_relative_tolerance": 0.002,
+    "convergence_tolerance": 2e-05,
+    "candidate_mode": "union",
+    "candidate_threshold": 1e-10,
+    "regions": [],
+    "per_bin_power_limits": {},
+    "seed": 42
+  },
+  "warnings": [
+    "Playback requires the validated integration step recorded in this report. The GUI uses it internally during RF and retains the normal simulation dt for recovery.",
+    "Some local power optimizations reached a limit or did not converge.",
+    "Chosen duration is at the upper search bound; consider extending the range.",
+    "Objective is final Q, not Q minus the no-RF endpoint. Natural dynamics may contribute to the increase."
+  ],
+  "budget_reached": false,
+  "elapsed_wall_seconds": 2.189113
+}

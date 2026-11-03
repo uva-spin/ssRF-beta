@@ -7,7 +7,7 @@ from __future__ import annotations
 import sys
 import csv
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 import numpy as np
 
 from .baseline_gui import Spin1RealtimeWindow as BaselineWindow, QtCore, QtWidgets
@@ -16,9 +16,10 @@ from .model import Spin1Params
 from .pulse_program import PulseProgram
 from .playback import PulsePlaybackController
 from .profile_editor import ProfileEditor, blocked
-from .safe_widgets import ArrowDoubleSpinBox, ArrowSpinBox, NoWheelComboBox
+from .safe_widgets import NumericDoubleEdit, NumericIntEdit, NoWheelComboBox
 from .profile_editing import nearest_bin
 from .numeric_dialogs import ExactValuesDialog, accepted, run_dialog
+from .afp import qneg_sweep_indices, selective_window_indices
 
 
 class Spin1RealtimeWindow(BaselineWindow):
@@ -39,6 +40,9 @@ class Spin1RealtimeWindow(BaselineWindow):
         self.trace_max_points = 4500
         self.trace_start_R = float(self.model.params.rf_burn_R)
         self.trace_start_vals = {}
+        self._manipulation_mode = "ssrf"
+        self._afp_preview_subset: List[int] = []
+        self.show_rf_overlay = False
         self._build_ui()
         self._init_plots()
         self._start_new_trace(record_now=True)
@@ -47,12 +51,12 @@ class Spin1RealtimeWindow(BaselineWindow):
         self.timer.setInterval(35)
         self.timer.timeout.connect(self._tick)
         self.timer.start()
-        self.resize(1000, 555)
+        self.resize(1200, 555)
 
     def _spin_box(self, label, value, lo, hi, step, decimals, callback):
         row = QtWidgets.QHBoxLayout()
         row.addWidget(QtWidgets.QLabel(label))
-        box = ArrowDoubleSpinBox()
+        box = NumericDoubleEdit()
         box.setDecimals(decimals)
         box.setRange(lo, hi)
         box.setSingleStep(step)
@@ -64,7 +68,7 @@ class Spin1RealtimeWindow(BaselineWindow):
     def _int_box(self, label, value, lo, hi, step, callback):
         row = QtWidgets.QHBoxLayout()
         row.addWidget(QtWidgets.QLabel(label))
-        box = ArrowSpinBox()
+        box = NumericIntEdit()
         box.setRange(lo, hi)
         box.setSingleStep(step)
         box.setValue(value)
@@ -93,7 +97,7 @@ class Spin1RealtimeWindow(BaselineWindow):
                                         self.model.params.r_min, self.model.params.r_max,
                                         self.model.dR, 9, self._set_R)
         markers_layout.addLayout(row)
-        self.R_box.setToolTip("Use arrows to move the monitor one bin. This does NOT move any RF pulse.")
+        self.R_box.setToolTip("Type the monitor R and press Enter. It snaps to the nearest bin; RF pulse locations stay fixed.")
         mirror_row = QtWidgets.QHBoxLayout()
         mirror_row.addWidget(QtWidgets.QLabel("Mirror R = -M"))
         self.mirror_R_readout = QtWidgets.QLineEdit()
@@ -109,7 +113,27 @@ class Spin1RealtimeWindow(BaselineWindow):
         markers_layout.addWidget(hint)
         parent_layout.insertWidget(position, markers)
 
+        mode_group = QtWidgets.QGroupBox("Manipulation mode")
+        mode_layout = QtWidgets.QVBoxLayout(mode_group)
+        self.mode_combo = NoWheelComboBox()
+        self.mode_combo.addItem("ss-RF only (timed per-bin program)", "ssrf")
+        self.mode_combo.addItem("AFP only (instantaneous sweep)", "afp")
+        self.mode_combo.addItem("Combined (ss-RF + AFP in one event)", "combined")
+        self.mode_combo.currentIndexChanged.connect(self._on_manipulation_mode_changed)
+        mode_layout.addWidget(self.mode_combo)
+        mode_hint = QtWidgets.QLabel(
+            "ss-RF applies a continuous equalization-rate schedule on pulse-table "
+            "windows. AFP applies an instantaneous population swap on its own "
+            "region. Combined keeps both panels active so you can apply them at "
+            "different times on arbitrary L/R windows in the same run."
+        )
+        mode_hint.setWordWrap(True)
+        mode_hint.setStyleSheet("font-size: 10px;")
+        mode_layout.addWidget(mode_hint)
+        parent_layout.insertWidget(position + 1, mode_group)
+
         group = QtWidgets.QGroupBox("RF program — custom per-bin commands")
+        self.rf_program_group = group
         layout = QtWidgets.QVBoxLayout(group)
         row, self.gain_box = self._spin_box("global RF gain", self.model.program.gain,
                                            0.0, 1000.0, 0.1, 4, self._set_gain)
@@ -148,6 +172,13 @@ class Spin1RealtimeWindow(BaselineWindow):
         layout.addWidget(self.profile_bounds_label)
         self._refresh_profile_picker()
         self.profile_view_combo.currentIndexChanged.connect(self._profile_view_changed)
+        self.rf_overlay_box = QtWidgets.QCheckBox("Show RF commands on spectrum")
+        self.rf_overlay_box.setChecked(self.show_rf_overlay)
+        self.rf_overlay_box.setToolTip(
+            "Show the planned and active RF commands on a separate right-hand axis. "
+            "Hidden by default so the command spikes do not obscure the spectral holes.")
+        self.rf_overlay_box.toggled.connect(self._set_rf_overlay_visible)
+        layout.addWidget(self.rf_overlay_box)
         hint = QtWidgets.QLabel(
             "RF positions come from the pulse-table bins, not M. "
             "L/R show the configured extent of the selected profile. "
@@ -157,8 +188,66 @@ class Spin1RealtimeWindow(BaselineWindow):
         )
         hint.setWordWrap(True); hint.setStyleSheet("font-size: 10px;")
         layout.addWidget(hint)
-        parent_layout.insertWidget(position+1, group)
+        parent_layout.insertWidget(position + 2, group)
+
+        afp_group = QtWidgets.QGroupBox("AFP application")
+        self.afp_group = afp_group
+        afp_layout = QtWidgets.QVBoxLayout(afp_group)
+        afp_layout.addWidget(QtWidgets.QLabel("Region"))
+        self.afp_region_combo = NoWheelComboBox()
+        self.afp_region_combo.addItem("Optimal profile (Q < 0)", "qneg")
+        self.afp_region_combo.addItem("Selective (L / R)", "selective")
+        self.afp_region_combo.currentIndexChanged.connect(self._on_afp_region_changed)
+        afp_layout.addWidget(self.afp_region_combo)
+
+        self.afp_bounds_widget = QtWidgets.QWidget()
+        bounds_layout = QtWidgets.QVBoxLayout(self.afp_bounds_widget)
+        bounds_layout.setContentsMargins(0, 0, 0, 0)
+        row, self.afp_left_box = self._spin_box(
+            "Left L (R)", -0.98,
+            self.model.params.r_min, self.model.params.r_max,
+            self.model.dR, 6, self._on_afp_bounds_changed,
+        )
+        bounds_layout.addLayout(row)
+        row, self.afp_right_box = self._spin_box(
+            "Right R (R)", -0.72,
+            self.model.params.r_min, self.model.params.r_max,
+            self.model.dR, 6, self._on_afp_bounds_changed,
+        )
+        bounds_layout.addLayout(row)
+        self.afp_exact_bounds_button = QtWidgets.QPushButton("Enter exact L / R bounds...")
+        self.afp_exact_bounds_button.clicked.connect(self._enter_afp_bounds)
+        bounds_layout.addWidget(self.afp_exact_bounds_button)
+        afp_layout.addWidget(self.afp_bounds_widget)
+
+        row, self.afp_efficiency_box = self._spin_box(
+            "AFP efficiency η", float(self.model.params.afp_efficiency),
+            0.0, 1.0, 0.05, 3, self._set_afp_efficiency,
+        )
+        afp_layout.addLayout(row)
+        self.afp_status_label = QtWidgets.QLabel()
+        self.afp_status_label.setWordWrap(True)
+        self.afp_status_label.setStyleSheet("font-size: 10px;")
+        afp_layout.addWidget(self.afp_status_label)
+        self.afp_apply_button = QtWidgets.QPushButton("Apply AFP now")
+        self.afp_apply_button.clicked.connect(self._apply_afp)
+        afp_layout.addWidget(self.afp_apply_button)
+        afp_hint = QtWidgets.QLabel(
+            "AFP is instantaneous: n+↔n0 at each selected bin and n0↔n− at its "
+            "mirror. Optimal profile uses live Q(R)=I+(R)−I−(R)<0 (mirror-safe). "
+            "Selective uses one contiguous L/R window, independent of the RF "
+            "program table. In Combined mode, mute RF (RF OFF) or leave a gap "
+            "in the schedule, click Apply AFP now at the desired simulation "
+            "time, then continue with RF ON / Run on any other window."
+        )
+        afp_hint.setWordWrap(True)
+        afp_hint.setStyleSheet("font-size: 10px;")
+        afp_layout.addWidget(afp_hint)
+        parent_layout.insertWidget(position + 3, afp_group)
+
         self.info_label.setStyleSheet("font-size: 10px;")
+        self._sync_manipulation_mode_ui()
+        self._fit_control_panel()
 
     def _init_plots(self):
         # Keep the existing compact window height. The two spectral panels
@@ -190,21 +279,23 @@ class Spin1RealtimeWindow(BaselineWindow):
         self.right_text = self.ax_spec.text(0, 0.74, "R", transform=self.ax_spec.get_xaxis_transform(),
                                            ha="center", va="top", fontsize=7)
         self.ax_rf_profile = self.ax_spec.twinx()
-        self.line_preview, = self.ax_rf_profile.plot([],[],linestyle=":",linewidth=0.9,alpha=0.5,
+        self.line_preview, = self.ax_rf_profile.plot([],[],linestyle=":",linewidth=1.0,alpha=0.85,
                                                     drawstyle="steps-mid",label="program envelope")
         self.line_rf_profile, = self.ax_rf_profile.plot([],[],linestyle="--",linewidth=1.3,
                                                        drawstyle="steps-mid",label="RF applied now")
-        self.ax_rf_profile.set_ylabel("RF base rate U",fontsize=8)
+        self.ax_rf_profile.set_ylabel("RF command U",fontsize=8)
         self.ax_rf_profile.tick_params(axis="y",labelsize=7)
         # Label the common frequency axis on the middle panel, not twice.
         self.ax_spec.tick_params(axis="x", labelbottom=False)
         self.ax_spec.set_ylabel("intensity [arb.]",fontsize=9)
-        self.ax_spec.set_title("Overlapping Pake doublet and ideal RF commands",fontsize=10)
-        handles, labels = self.ax_spec.get_legend_handles_labels()
-        h2,l2 = self.ax_rf_profile.get_legend_handles_labels()
-        self.ax_spec.legend(handles+h2,labels+l2,loc="upper left",ncol=3,fontsize=7)
+        self.ax_spec.set_title("Multisite d-butanol and RF" if getattr(self.model.params,'line_model','single_pake')=='multisite_butanol'
+                               else "Overlapping Pake doublet and ideal RF commands",fontsize=10)
+        self._sync_rf_overlay_display()
         self.line_tensor, = self.ax_tensor.plot(
             [], [], linewidth=1.3, drawstyle="steps-mid", label="I+(R) - I-(R)")
+        self.line_afp_mask, = self.ax_tensor.plot(
+            [], [], linewidth=2.0, drawstyle="steps-mid", alpha=0.85,
+            color="tab:purple", label="AFP subset (preview/last)")
         self.tensor_zero = self.ax_tensor.axhline(
             0.0, linestyle="--", linewidth=0.7, alpha=0.6, label="_nolegend_")
         self.tensor_monitor_line = self.ax_tensor.axvline(
@@ -214,6 +305,7 @@ class Spin1RealtimeWindow(BaselineWindow):
         self.ax_tensor.set_title("Tensor spectrum: I+(R) - I-(R)", fontsize=9)
         self.ax_tensor.set_xlabel("physical R", fontsize=8)
         self.ax_tensor.set_ylabel("I+ - I- [arb.]", fontsize=8)
+        self.ax_tensor.legend(loc="upper right", fontsize=7)
 
         self.trace_line_Ip_R, = self.ax_trace.plot(
             [], [], label="I+(M,t) monitor", linewidth=1.3)
@@ -230,9 +322,36 @@ class Spin1RealtimeWindow(BaselineWindow):
             label="I-(-M,t) mirror")
         self.ax_trace.set_xlabel("time since trace start [simulation units]", fontsize=8)
         self.ax_trace.set_ylabel("local intensity [arb.]", fontsize=8)
-        self.ax_trace.legend(loc="best", ncol=2, fontsize=7)
+        self.ax_trace.legend(loc="upper right", ncol=2, fontsize=7)
         for ax in (self.ax_spec, self.ax_tensor, self.ax_trace):
             ax.tick_params(labelsize=7)
+        self.canvas.mpl_connect("resize_event", lambda event: self._sync_rf_overlay_display())
+
+    def _set_rf_overlay_visible(self, checked):
+        self.show_rf_overlay = bool(checked)
+        self._sync_rf_overlay_display()
+        self.canvas.draw_idle()
+
+    def _sync_rf_overlay_display(self):
+        """Keep command graphics optional without changing the RF gate or data."""
+        visible = bool(getattr(self, "show_rf_overlay", False))
+        self.ax_rf_profile.set_visible(visible)
+        self.line_preview.set_visible(visible)
+        self.line_rf_profile.set_visible(visible)
+        handles, labels = self.ax_spec.get_legend_handles_labels()
+        if visible:
+            rf_handles, rf_labels = self.ax_rf_profile.get_legend_handles_labels()
+            handles += rf_handles
+            labels += rf_labels
+        # Keep the legend clear of the spectrum and the tops of RF plateaus.
+        width = self.fig.get_figwidth()
+        columns = 4 if width >= 7 else (3 if width >= 5.5 else 2)
+        rows = (len(handles) + columns - 1) // columns
+        self.ax_spec.legend(handles, labels, loc="lower left", ncol=columns,
+                            fontsize=7, bbox_to_anchor=(0, 1.02), borderaxespad=0)
+        self.ax_spec.set_title("Multisite d-butanol and RF" if getattr(self.model.params,'line_model','single_pake')=='multisite_butanol'
+                               else "Overlapping Pake doublet and ideal RF commands",
+                               fontsize=10, pad=8+12*rows)
 
     def _start_new_trace(self, record_now: bool = False) -> None:
         """Reset all four histories together without changing the live model.
@@ -299,6 +418,181 @@ class Spin1RealtimeWindow(BaselineWindow):
         finally:
             if running: self.timer.start()
 
+    def _afp_panel_active(self) -> bool:
+        return getattr(self, "_manipulation_mode", "ssrf") in ("afp", "combined")
+
+    def _ssrf_panel_active(self) -> bool:
+        return getattr(self, "_manipulation_mode", "ssrf") in ("ssrf", "combined")
+
+    def _on_manipulation_mode_changed(self, *_args):
+        data = self.mode_combo.currentData()
+        if data in ("ssrf", "afp", "combined"):
+            self._manipulation_mode = data
+        else:
+            self._manipulation_mode = "ssrf"
+        if self._manipulation_mode == "afp":
+            # AFP-only: mute any active RF schedule.
+            try:
+                PulsePlaybackController(self.model).rf_off()
+            except (ValueError, FloatingPointError, RuntimeError):
+                self.model.set_rf_enabled(False)
+            self._sync_rf_button()
+        self._sync_manipulation_mode_ui()
+        if hasattr(self, "ax_spec"):
+            self._update_plots()
+
+    def _sync_manipulation_mode_ui(self):
+        ssrf = self._ssrf_panel_active()
+        afp = self._afp_panel_active()
+        if hasattr(self, "rf_program_group"):
+            self.rf_program_group.setVisible(ssrf)
+        if hasattr(self, "afp_group"):
+            self.afp_group.setVisible(afp)
+        if hasattr(self, "rf_button"):
+            self.rf_button.setEnabled(ssrf)
+            if not ssrf:
+                with blocked(self.rf_button):
+                    self.rf_button.setChecked(False)
+                self.model.set_rf_enabled(False)
+                self._update_rf_button()
+        self._on_afp_region_changed()
+        self._refresh_afp_status()
+
+    def _on_afp_region_changed(self, *_args):
+        selective = (
+            hasattr(self, "afp_region_combo")
+            and self.afp_region_combo.currentData() == "selective"
+        )
+        if hasattr(self, "afp_bounds_widget"):
+            self.afp_bounds_widget.setVisible(selective)
+        self._refresh_afp_status()
+        if hasattr(self, "ax_spec"):
+            self._update_plots()
+
+    def _on_afp_bounds_changed(self, *_args):
+        self._refresh_afp_status()
+        if hasattr(self, "ax_spec"):
+            self._update_plots()
+
+    def _set_afp_efficiency(self, value):
+        self.model.params.afp_efficiency = float(value)
+
+    def _enter_afp_bounds(self):
+        running = self.timer.isActive()
+        self.timer.stop()
+        try:
+            d = ExactValuesDialog(
+                "Set AFP selective L / R bounds",
+                [
+                    ("left", "Left L (R)", self.afp_left_box.value(),
+                     self.model.params.r_min, self.model.params.r_max),
+                    ("right", "Right R (R)", self.afp_right_box.value(),
+                     self.model.params.r_min, self.model.params.r_max),
+                ],
+                self,
+                explanation=(
+                    "Bounds snap to nearest bin centers. Left must not exceed Right. "
+                    "AFP is applied on the mirror-safe subset of that contiguous window."
+                ),
+            )
+            if accepted(d, run_dialog(d)):
+                left = float(d.values["left"])
+                right = float(d.values["right"])
+                if left > right:
+                    QtWidgets.QMessageBox.warning(
+                        self, "AFP bounds", "Left R must not exceed Right R.")
+                    return
+                with blocked(self.afp_left_box):
+                    self.afp_left_box.setValue(left)
+                with blocked(self.afp_right_box):
+                    self.afp_right_box.setValue(right)
+                self._on_afp_bounds_changed()
+        finally:
+            if running:
+                self.timer.start()
+
+    def _resolve_afp_subset(self) -> List[int]:
+        region = self.afp_region_combo.currentData()
+        if region == "selective":
+            left = float(self.afp_left_box.value())
+            right = float(self.afp_right_box.value())
+            if left > right:
+                raise ValueError("Left R must not exceed Right R.")
+            return selective_window_indices(self.model.Rplus, left, right)
+        _R, Ip, Im, _total = self.model.spectrum(noise_sigma=0.0)
+        q = np.asarray(Ip) - np.asarray(Im)
+        return qneg_sweep_indices(q)
+
+    def _refresh_afp_status(self):
+        if not hasattr(self, "afp_status_label"):
+            return
+        try:
+            subset = self._resolve_afp_subset()
+            self._afp_preview_subset = list(subset)
+            if not subset:
+                self.afp_status_label.setText(
+                    "Planned AFP subset: empty (nothing to apply).")
+            else:
+                r0 = float(self.model.Rplus[subset[0]])
+                r1 = float(self.model.Rplus[subset[-1]])
+                self.afp_status_label.setText(
+                    f"Planned AFP subset: {len(subset)} bins "
+                    f"(R from {r0:+.4f} to {r1:+.4f}, mirror-safe)."
+                )
+        except (ValueError, FloatingPointError) as exc:
+            self._afp_preview_subset = []
+            self.afp_status_label.setText(f"Cannot resolve AFP subset: {exc}")
+
+    def _apply_afp(self):
+        if not self._afp_panel_active():
+            return
+        # Instantaneous AFP: mute RF for the flip so rates and the swap do not
+        # compete in the same Euler step. The schedule can be restarted later.
+        try:
+            PulsePlaybackController(self.model).rf_off()
+        except (ValueError, FloatingPointError, RuntimeError):
+            self.model.set_rf_enabled(False)
+        self._sync_rf_button()
+        try:
+            subset = self._resolve_afp_subset()
+            if not subset:
+                QtWidgets.QMessageBox.warning(
+                    self, "AFP", "AFP subset is empty; nothing to apply.")
+                self._refresh_afp_status()
+                return
+            self.model.params.afp_efficiency = float(self.afp_efficiency_box.value())
+            applied = self.model.afp_sweep(subset)
+            self._afp_preview_subset = list(applied)
+            self._record_trace_point()
+            self._refresh_afp_status()
+            self._update_plots()
+            t_now = float(self.model.t)
+            self.statusBar().showMessage(
+                f"t={t_now:.5f}: AFP applied on {len(applied)} bins "
+                f"(η={self.model.params.afp_efficiency:g}). "
+                "RF stays off until you click RF ON / Start again."
+            )
+        except (ValueError, FloatingPointError, RuntimeError) as exc:
+            QtWidgets.QMessageBox.warning(self, "AFP not applied", str(exc))
+
+    def _afp_overlay_arrays(self, R, tensor):
+        """Step envelope highlighting planned/last AFP bins on the tensor panel."""
+        mask = np.full_like(tensor, np.nan, dtype=float)
+        subset = list(getattr(self, "_afp_preview_subset", []) or [])
+        last = list(getattr(self.model, "_afp_last_subset", []) or [])
+        show = subset if self._afp_panel_active() else last
+        if not show:
+            return R, mask
+        n = len(R)
+        for i in show:
+            i = int(i)
+            if 0 <= i < n and np.isfinite(tensor[i]):
+                mask[i] = tensor[i]
+            m = n - 1 - i
+            if 0 <= m < n and np.isfinite(tensor[m]):
+                mask[m] = tensor[m]
+        return R, mask
+
     def _refresh_profile_picker(self):
         old = self.profile_view_combo.currentData()
         with blocked(self.profile_view_combo):
@@ -358,6 +652,13 @@ class Spin1RealtimeWindow(BaselineWindow):
         self._update_rf_button()
 
     def _toggle_rf(self, checked):
+        if not self._ssrf_panel_active():
+            # RF schedules are disabled in AFP-only mode.
+            with blocked(self.rf_button):
+                self.rf_button.setChecked(False)
+            self.model.set_rf_enabled(False)
+            self._update_rf_button()
+            return
         controller = PulsePlaybackController(self.model)
         try:
             if checked:
@@ -378,6 +679,11 @@ class Spin1RealtimeWindow(BaselineWindow):
             QtWidgets.QMessageBox.warning(self, "RF not started", str(exc))
 
     def _start_program(self):
+        if not self._ssrf_panel_active():
+            QtWidgets.QMessageBox.information(
+                self, "RF program",
+                "Switch to ss-RF only or Combined mode to start an RF program.")
+            return
         try:
             PulsePlaybackController(self.model).restart()
             self._sync_rf_button()
@@ -400,8 +706,8 @@ class Spin1RealtimeWindow(BaselineWindow):
         self.pause_button.setText("Run simulation" if self.paused else "Pause simulation")
         self._update_plots()
 
-    def _apply_program(self, program):
-        self.model.set_program(program)
+    def _apply_program(self, program, *, integration_dt=None):
+        self.model.set_program(program, integration_dt=integration_dt)
         self._refresh_profile_picker()
         self._sync_rf_button()
         with blocked(self.gain_box): self.gain_box.setValue(self.model.program.gain)
@@ -515,6 +821,14 @@ class Spin1RealtimeWindow(BaselineWindow):
         self.line_Ip.set_data(R,Ip); self.line_Im.set_data(R,Im); self.line_total.set_data(R,total)
         tensor = Ip - Im
         self.line_tensor.set_data(R, tensor)
+        if self._afp_panel_active():
+            self._refresh_afp_status()
+        if hasattr(self, "line_afp_mask"):
+            Rf, mask = self._afp_overlay_arrays(R, tensor)
+            self.line_afp_mask.set_data(Rf, mask)
+            self.line_afp_mask.set_visible(
+                self._afp_panel_active() or bool(getattr(self.model, "_afp_last_subset", None))
+            )
         self.tensor_monitor_line.set_xdata([Rb, Rb])
         self.tensor_mirror_line.set_xdata([-Rb, -Rb])
         finite_tensor = self._finite_values(tensor)
@@ -525,7 +839,9 @@ class Spin1RealtimeWindow(BaselineWindow):
             self.ax_tensor.set_ylim(low-pad, high+pad)
         preview=self.model.preview_rf_field(); active=self.model.applied_rf_field()
         self.line_preview.set_data(R,preview); self.line_rf_profile.set_data(R,active)
-        self.ax_rf_profile.set_ylim(0, max(0.1,1.1*float(preview.max()),1.1*float(active.max())))
+        # Plot the actual command values; headroom is visual, never a power
+        # normalization. A plateau at U_max can be the optimizer's real bound.
+        self.ax_rf_profile.set_ylim(0, max(0.1,1.25*float(preview.max()),1.25*float(active.max())))
         self.burn_line.set_xdata([Rb,Rb]); self.mirror_line.set_xdata([-Rb,-Rb])
         self.mirror_R_readout.setText(f"{-Rb:+.9f}")
         self.monitor_text.set_position((Rb, .99)); self.mirror_text.set_position((-Rb, .91))
@@ -556,10 +872,32 @@ class Spin1RealtimeWindow(BaselineWindow):
         self.p_readout.setText(f"P(t) = {pol['P']:+.5f}   ({100*pol['P']:+.2f}%)")
         self.q_readout.setText(f"Q(t)={pol['Q']:+.5f}     Q_B[P]={pol['Q_boltz_at_P']:+.5f}")
         self._sync_rf_button()
-        playback = PulsePlaybackController(self.model)
-        status = playback.status_text(paused=self.paused)
-        self.program_label.setText(status)
-        self.statusBar().showMessage(status.replace("\n", "  |  "))
+        mode = getattr(self, "_manipulation_mode", "ssrf")
+        n_sub = len(getattr(self, "_afp_preview_subset", []) or [])
+        last = len(getattr(self.model, "_afp_last_subset", []) or [])
+        if mode == "afp":
+            status = (
+                f"Mode: AFP only  |  planned subset={n_sub} bins  |  "
+                f"last applied={last} bins  |  η={self.model.params.afp_efficiency:g}"
+            )
+            if hasattr(self, "program_label"):
+                self.program_label.setText(status)
+            self.statusBar().showMessage(status)
+        elif mode == "combined":
+            playback = PulsePlaybackController(self.model)
+            rf_status = playback.status_text(paused=self.paused).replace("\n", "  |  ")
+            status = (
+                f"Mode: Combined  |  {rf_status}  |  "
+                f"AFP planned={n_sub}  last={last}  η={self.model.params.afp_efficiency:g}"
+            )
+            if hasattr(self, "program_label"):
+                self.program_label.setText(status)
+            self.statusBar().showMessage(status)
+        else:
+            playback = PulsePlaybackController(self.model)
+            status = playback.status_text(paused=self.paused)
+            self.program_label.setText(status)
+            self.statusBar().showMessage(status.replace("\n", "  |  "))
         rates=self.model.effective_local_rates()
         diff=self.model.local_diffusion_diagnostics(dnp_on=self.dnp_is_on())
         eq=self.model.recovery_equilibrium_diagnostics()
@@ -567,7 +905,7 @@ class Spin1RealtimeWindow(BaselineWindow):
         self.info_label.setText(
             f"Simulation t={self.model.t:.5f}\n"
             f"Monitor R={self.model.params.rf_burn_R:.6f}\n"
-            f"Applied base rate at monitor={gate_factor*rates['command_at_R']:.5g}\n"
+            f"Applied command at monitor={gate_factor*rates['command_at_R']:.5g}\n"
             f"Effective Γ+={gate_factor*rates['gamma_rf_Iplus_R']:.5g}; "
             f"Γ-={gate_factor*rates['gamma_rf_Iminus_R']:.5g}\n"
             f"Diffusion dI+/dt={diff['dIplus_diff_dt']:+.4e}\n"
@@ -575,8 +913,11 @@ class Spin1RealtimeWindow(BaselineWindow):
             f"Q-Q_B(P)={eq['Q_minus_Q_B']:+.3e}\n"
             f"Boltzmann population RMS={eq['fraction_rms_error']:.3e}\n"
             + ("\n".join(eq['warnings'])+"\n" if eq['warnings'] else "") +
-            "RF power is a base-rate setting, not watts. Existing packet coupling "
-            "weights still apply; no Voigt spreading is used."
+            ("U is proportional to carrier power, not calibrated watts. Homogeneous "
+             f"RF response includes linewidth spreading and peak selectivity "
+             f"{self.model.params.rf_peak_selectivity:.3g} (0 = equal per-spin rates)."
+             if self.model.params.rf_response_mode == 'spectral' else
+             "U is an uncalibrated command. Empirical RF coupling weights apply in this compatibility mode.")
         )
 
 
@@ -586,7 +927,7 @@ def main(argv=None):
     screen=app.primaryScreen()
     if screen is not None:
         geom=screen.availableGeometry()
-        win.resize(min(1000,int(0.95*geom.width())), min(555,int(0.88*geom.height())))
+        win.resize(min(1200,int(0.95*geom.width())), min(555,int(0.88*geom.height())))
     win.show()
     return int(app.exec() if hasattr(app,"exec") else app.exec_())
 

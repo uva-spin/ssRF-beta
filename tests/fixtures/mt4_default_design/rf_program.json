@@ -1,0 +1,954 @@
+{
+  "schema": "ssrf-ideal-bin-program-1",
+  "units": "simulation_time_and_base_RF_rate",
+  "overlap": "add",
+  "n_bins": 500,
+  "r_min": -3.0,
+  "r_max": 3.0,
+  "gain": 1.0,
+  "profiles": [
+    {
+      "name": "Negative-R region",
+      "enabled": true,
+      "pulses": [
+        {
+          "bin_index": 163,
+          "rate": 0.03204940333682302,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 164,
+          "rate": 0.3835613925493217,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 165,
+          "rate": 2.319130182331762,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 166,
+          "rate": 7.554774020146191,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 167,
+          "rate": 13.953817859617441,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 168,
+          "rate": 16.355627391440727,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 169,
+          "rate": 15.298846265009914,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 170,
+          "rate": 14.369104485377786,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 171,
+          "rate": 13.9352747533748,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 172,
+          "rate": 13.68479990350988,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 173,
+          "rate": 13.62968495580415,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 174,
+          "rate": 13.656920309139124,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 175,
+          "rate": 13.712181726002944,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 176,
+          "rate": 13.764970279325645,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 177,
+          "rate": 13.803670854593761,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 178,
+          "rate": 13.824423999099476,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 179,
+          "rate": 13.826428015769713,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 180,
+          "rate": 13.810173769695863,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 181,
+          "rate": 13.781322556395661,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 182,
+          "rate": 13.752211698880231,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 183,
+          "rate": 13.71646108906768,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 184,
+          "rate": 13.607260645545939,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 185,
+          "rate": 13.363554912963027,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 186,
+          "rate": 12.99790984808667,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 187,
+          "rate": 12.550031046180575,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 188,
+          "rate": 12.051130612939545,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 189,
+          "rate": 11.52662276647698,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 190,
+          "rate": 10.994444449200966,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 191,
+          "rate": 10.462137490329555,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 192,
+          "rate": 9.925591912005032,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 193,
+          "rate": 9.377967520174003,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 194,
+          "rate": 8.771411920773868,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 195,
+          "rate": 8.161243613694051,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 196,
+          "rate": 7.310980293182599,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 197,
+          "rate": 5.171000339061952,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 198,
+          "rate": 2.2398473565508366,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 199,
+          "rate": 0.49243030803844395,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 200,
+          "rate": 0.04912866010614529,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "name": "Nonnegative-R region",
+      "enabled": true,
+      "pulses": [
+        {
+          "bin_index": 344,
+          "rate": 0.00011468128218884434,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 345,
+          "rate": 0.00648783847214477,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 346,
+          "rate": 0.11372930656263919,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 347,
+          "rate": 0.9484571289397781,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 348,
+          "rate": 3.672173018875337,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 349,
+          "rate": 7.011693068829615,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 350,
+          "rate": 8.477337320991312,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 351,
+          "rate": 9.310920789356873,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 352,
+          "rate": 10.153667408065976,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 353,
+          "rate": 10.777659850325318,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 354,
+          "rate": 11.269936349596813,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 355,
+          "rate": 11.628303672025474,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 356,
+          "rate": 11.886420962255144,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 357,
+          "rate": 12.060383717557308,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 358,
+          "rate": 12.18391361877125,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 359,
+          "rate": 12.277560575466124,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 360,
+          "rate": 12.360168062280197,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 361,
+          "rate": 12.459365745679403,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 362,
+          "rate": 12.595304243856527,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 363,
+          "rate": 12.796206020712262,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 364,
+          "rate": 13.058879912145393,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 365,
+          "rate": 13.320929603249002,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 366,
+          "rate": 13.55355150185276,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 367,
+          "rate": 13.767524195269496,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 368,
+          "rate": 13.97112858306392,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 369,
+          "rate": 14.166217031828486,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 370,
+          "rate": 14.352187035483242,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 371,
+          "rate": 14.529922325927242,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 372,
+          "rate": 14.70083214868482,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 373,
+          "rate": 14.865076065839142,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 374,
+          "rate": 15.022506235424943,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 375,
+          "rate": 15.173729203636153,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 376,
+          "rate": 15.319983788943798,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 377,
+          "rate": 15.462227324022097,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 378,
+          "rate": 15.600526285465758,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 379,
+          "rate": 15.734483231071415,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 380,
+          "rate": 15.864019473414123,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 381,
+          "rate": 15.989549607596379,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 382,
+          "rate": 16.111588942968048,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 383,
+          "rate": 16.230405604831375,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 384,
+          "rate": 16.346010004855046,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 385,
+          "rate": 16.458352246766882,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 386,
+          "rate": 16.5675155770811,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 387,
+          "rate": 16.67379142893745,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 388,
+          "rate": 16.777608097710736,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 389,
+          "rate": 16.87935064248228,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 390,
+          "rate": 16.979174044350138,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 391,
+          "rate": 17.076933333843424,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 392,
+          "rate": 17.17229014447928,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 393,
+          "rate": 17.264933997400647,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 394,
+          "rate": 17.354772172440438,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 395,
+          "rate": 17.441971339188353,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 396,
+          "rate": 17.526855364823334,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 397,
+          "rate": 17.609760678585264,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 398,
+          "rate": 17.690928790653267,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 399,
+          "rate": 17.770422391709168,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 400,
+          "rate": 17.848033914461414,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 401,
+          "rate": 17.923254224977555,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 402,
+          "rate": 17.995414415061198,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 403,
+          "rate": 18.063952309869908,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 404,
+          "rate": 18.128553299666272,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 405,
+          "rate": 18.188986989231545,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 406,
+          "rate": 18.244732649019625,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 407,
+          "rate": 18.294541308411556,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 408,
+          "rate": 18.33592890676882,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 409,
+          "rate": 18.36462462334981,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 410,
+          "rate": 18.373924556670723,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 411,
+          "rate": 18.35326507673516,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 412,
+          "rate": 18.285013908226016,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 413,
+          "rate": 18.13948800445057,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 414,
+          "rate": 17.871800991091337,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 415,
+          "rate": 17.431387846023103,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 416,
+          "rate": 16.792318158461743,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 417,
+          "rate": 15.983508098054307,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 418,
+          "rate": 15.080920736077934,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 419,
+          "rate": 14.164727819493498,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 420,
+          "rate": 13.285156318356051,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 421,
+          "rate": 12.458439165921446,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 422,
+          "rate": 11.679296732006682,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 423,
+          "rate": 10.935764513927456,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 424,
+          "rate": 10.220604476147923,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 425,
+          "rate": 9.532550368186316,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 426,
+          "rate": 8.865464512720951,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 427,
+          "rate": 8.201367072290646,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 428,
+          "rate": 7.5268370786701455,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 429,
+          "rate": 6.849912677018816,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 430,
+          "rate": 6.166145359938122,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 431,
+          "rate": 5.43486862284264,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 432,
+          "rate": 4.679123336090294,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 433,
+          "rate": 3.8913970807096283,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 434,
+          "rate": 2.705842724285838,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 435,
+          "rate": 1.19634435161138,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 436,
+          "rate": 0.2684368773227145,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 437,
+          "rate": 0.027087484646349864,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        },
+        {
+          "bin_index": 438,
+          "rate": 0.0011459386729943473,
+          "start": 0.0,
+          "duration": 0.01,
+          "enabled": true
+        }
+      ]
+    }
+  ]
+}

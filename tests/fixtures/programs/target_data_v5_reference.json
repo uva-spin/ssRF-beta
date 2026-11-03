@@ -1,0 +1,136 @@
+{
+  "schema": "ssrf-ideal-bin-program-1",
+  "units": "simulation_time_and_base_RF_rate",
+  "overlap": "add",
+  "n_bins": 500,
+  "r_min": -6.186203737076448,
+  "r_max": 6.186203737076448,
+  "gain": 1.0,
+  "profiles": [
+    {
+      "name": "V4 reference power assumption on multisite grid",
+      "enabled": true,
+      "pulses": [
+        {
+          "bin_index": 204,
+          "rate": 1.443546078473831e-08,
+          "start": 0.0,
+          "duration": 34.0,
+          "enabled": true
+        },
+        {
+          "bin_index": 205,
+          "rate": 8.293095839988009e-07,
+          "start": 0.0,
+          "duration": 34.0,
+          "enabled": true
+        },
+        {
+          "bin_index": 206,
+          "rate": 2.7312551723719237e-05,
+          "start": 0.0,
+          "duration": 34.0,
+          "enabled": true
+        },
+        {
+          "bin_index": 207,
+          "rate": 0.000515664730616993,
+          "start": 0.0,
+          "duration": 34.0,
+          "enabled": true
+        },
+        {
+          "bin_index": 208,
+          "rate": 0.005581258522272235,
+          "start": 0.0,
+          "duration": 34.0,
+          "enabled": true
+        },
+        {
+          "bin_index": 209,
+          "rate": 0.034630312420415504,
+          "start": 0.0,
+          "duration": 34.0,
+          "enabled": true
+        },
+        {
+          "bin_index": 210,
+          "rate": 0.12318001115538205,
+          "start": 0.0,
+          "duration": 34.0,
+          "enabled": true
+        },
+        {
+          "bin_index": 211,
+          "rate": 0.2511791739533328,
+          "start": 0.0,
+          "duration": 34.0,
+          "enabled": true
+        },
+        {
+          "bin_index": 212,
+          "rate": 0.2936206365781033,
+          "start": 0.0,
+          "duration": 34.0,
+          "enabled": true
+        },
+        {
+          "bin_index": 213,
+          "rate": 0.1967655587768952,
+          "start": 0.0,
+          "duration": 34.0,
+          "enabled": true
+        },
+        {
+          "bin_index": 214,
+          "rate": 0.07559118434215245,
+          "start": 0.0,
+          "duration": 34.0,
+          "enabled": true
+        },
+        {
+          "bin_index": 215,
+          "rate": 0.016647643827409332,
+          "start": 0.0,
+          "duration": 34.0,
+          "enabled": true
+        },
+        {
+          "bin_index": 216,
+          "rate": 0.0021018124527997653,
+          "start": 0.0,
+          "duration": 34.0,
+          "enabled": true
+        },
+        {
+          "bin_index": 217,
+          "rate": 0.00015212293825892905,
+          "start": 0.0,
+          "duration": 34.0,
+          "enabled": true
+        },
+        {
+          "bin_index": 218,
+          "rate": 6.311825867510416e-06,
+          "start": 0.0,
+          "duration": 34.0,
+          "enabled": true
+        },
+        {
+          "bin_index": 219,
+          "rate": 1.5013255371368358e-07,
+          "start": 0.0,
+          "duration": 34.0,
+          "enabled": true
+        },
+        {
+          "bin_index": 220,
+          "rate": 2.04717181728178e-09,
+          "start": 0.0,
+          "duration": 34.0,
+          "enabled": true
+        }
+      ]
+    }
+  ]
+}

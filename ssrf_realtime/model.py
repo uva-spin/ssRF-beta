@@ -18,12 +18,13 @@ currents filtered by spectral overlap and optional orientation correlation:
   level populations. Cross-branch exchange is now ON by default to equilibrate
   tensor order; double-quantum flip-flops transport Zeeman order across
   quadrupolarly separated packets. No state is reset to a Boltzmann target.
-* RF and DNP retain the accepted Pake-density rate weighting from the previous
-  package.
+* Legacy RF and DNP share the inherited empirical density weighting.
+  Independent RF mode adds separate density controls and a smooth pedestal gain.
 * Internal spin diffusion uses packet capacities and nonlinear population
   availability directly; it does not multiply the microscopic exchange scale by
   the Pake line height a second time.
-* Setting diffusion_scale=0 and both RF widths to zero reproduces the previous ideal-bin RF/DNP dynamics exactly.
+* In legacy RF mode, setting diffusion_scale=0 and both RF widths to zero
+  reproduces the previous ideal-bin RF/DNP dynamics exactly.
 
 State convention
 ----------------
@@ -45,9 +46,10 @@ One common RF spectral field is applied to both transitions.  Mirror changes are
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
+from scipy.fft import rfft, irfft, next_fast_len
 
 try:
     from scipy.sparse import coo_matrix as _coo_matrix
@@ -62,6 +64,7 @@ from .lineshape import (
     pake_component_raw,
     trapezoid_integral,
 )
+from .afp import perform_afp_on_populations
 from .rf_profile import (
     approximate_voigt_fwhm,
     bin_averaged_voigt,
@@ -81,13 +84,24 @@ class Spin1Params:
     """Numerical and phenomenological parameters for the spin-1 model."""
 
     # Packet/display grid in dimensionless physical R units.
-    n_bins: int = 701
+    n_bins: int = 500
     r_min: float = -3.0
     r_max: float = 3.0
 
     # Realistic analytic Pake branch parameters.  Defaults match Plot_Signal.py.
     line_gamma: float = 0.05
     line_asym: float = 0.04
+
+    # Optional azimuth-averaged C-D/O-D mixture. R is measured in the C-D
+    # splitting unit; line_gamma is the common physical HWHM in those units.
+    # Site populations at a given R share kinetics (an effective closure).
+    line_model: str = 'single_pake'
+    line_cd_scale_R: float = 1.0
+    line_od_scale_ratio: float = 1.6
+    line_eta_cd: float = 0.03
+    line_eta_od: float = 0.12
+    line_od_fraction: float = 0.07
+    line_phi_points: int = 64
 
     # Display calibration.  The analytic branch shape is used for the spectral
     # envelope.  calibration_p fixes the displayed scale; by default P=0.50
@@ -176,11 +190,35 @@ class Spin1Params:
     # this at one unless DNP-on/off recovery measurements support a difference.
     microwave_diffusion_factor: float = 1.0
 
-    # Local Pake-density rate weighting retained for RF and DNP only.  The
+    # Density weighting for DNP (and RF in legacy mode). The
     # diffusion kernel already contains packet capacities mu_k and mu_l, so the
     # Pake line height is not applied to diffusion a second time.
     capacity_rate_power: float = 1.0
     capacity_rate_clip: float = 12.0
+
+    # Independent, empirical RF response. Legacy mode reproduces Budget exactly.
+    # Independent mode keeps the density response separate from DNP and applies
+    # a smooth, even-in-frequency pedestal gain outside protected peak bands.
+    rf_response_mode: str = "legacy"
+    rf_density_power: float = 1.0
+    rf_density_clip: float = 12.0
+    rf_pedestal_gain: float = 1.0
+    rf_peak_center_R: float = 0.96
+    rf_peak_half_width_R: float = 0.16
+    rf_transition_width_R: float = 0.25
+
+    # Spectral RF mode: homogeneous kernel, with optional peak selectivity below.
+    # W_ij = strength * Gamma/(Gamma^2 + delta_R^2) * U_j.
+    # Strength has units R/(simulation time * command), Gamma is homogeneous
+    # HWHM. These demonstration values are NOT material calibration.
+    rf_spectral_strength: float = 0.04
+    rf_homogeneous_hwhm_R: float = 0.015
+
+    # Optional empirical packet selectivity inside the existing peak bands.
+    # Zero preserves MaterialTuning-2. One restores Budget-like relative
+    # density selectivity locally, while retaining the finite RF linewidth.
+    # The densest packet and the outer pedestal retain unit relative coupling.
+    rf_peak_selectivity: float = 0.0
 
     # DNP build/rebuild.  If enabled, this is an external reservoir that drives
     # the full line toward P_DNP_sat at rate dnp_rate.
@@ -194,9 +232,79 @@ class Spin1Params:
     t1_rate: float = 0.0
     t1_p_eq: float = 0.0
 
+    # ---- MaterialTuning-8 per-packet mechanism profiles -------------------
+    # Every packet i carries, for each mechanism X, a dimensionless factor
+    #   f_X(i) = D_X(i) * sum_s w_s(i) m_{X,s} [1 + a2_X P2(cos th_s) + a4_X P4(cos th_s)]
+    # w_s: share of the packet's spins from site s (C-D, O-D) at its frequency;
+    # th_s: that site's orientation for the packet frequency (+ branch);
+    # m_{X,CD}=1, m_{X,OD}=X_od_factor; D_X = clipped (density/mean)^exponent,
+    # renormalized to mu-weighted mean one. All defaults give f_X = 1 exactly,
+    # reproducing MaterialTuning-7. These are adjustable material hypotheses,
+    # not identified constants: tune them to measured burn/refill/build-up data.
+    #
+    # Spectral-mode RF coupling (multiplies both transitions of the packet).
+    # rf_coupling_density_exponent=1 with rf_coupling_pedestal_gain=10 gives the
+    # MaterialTuning-1 law (with the finite spectral linewidth retained).
+    rf_coupling_density_exponent: float = 0.0
+    rf_coupling_density_clip: float = 12.0
+    rf_coupling_pedestal_gain: float = 1.0
+    rf_coupling_theta_p2: float = 0.0
+    rf_coupling_theta_p4: float = 0.0
+    rf_coupling_od_factor: float = 1.0
+    # Spectral-mode homogeneous RF HWHM per receiving packet (T2 per packet).
+    # At fixed rf_spectral_strength a narrower packet has a higher on-resonance
+    # rate: Gamma_i = rf_homogeneous_hwhm_R * f_width(i).
+    rf_width_density_exponent: float = 0.0
+    rf_width_density_clip: float = 12.0
+    rf_width_theta_p2: float = 0.0
+    rf_width_theta_p4: float = 0.0
+    rf_width_od_factor: float = 1.0
+    # Flip-flop / spectral spin-diffusion strength per packet. Pair rates use
+    # sqrt(f_i f_j) so every current stays reversible and conservative.
+    exchange_density_exponent: float = 0.0
+    exchange_density_clip: float = 12.0
+    exchange_theta_p2: float = 0.0
+    exchange_theta_p4: float = 0.0
+    exchange_od_factor: float = 1.0
+    # DNP pumping per packet (multiplies the existing capacity_rate_power weight).
+    dnp_theta_p2: float = 0.0
+    dnp_theta_p4: float = 0.0
+    dnp_od_factor: float = 1.0
+    # Spin-lattice relaxation per packet.
+    t1_density_exponent: float = 0.0
+    t1_density_clip: float = 12.0
+    t1_theta_p2: float = 0.0
+    t1_theta_p4: float = 0.0
+    t1_od_factor: float = 1.0
+
+    # ---- MaterialTuning-8 structural physics (extended dynamics engine) ---
+    # Site-resolved populations: separate C-D and O-D packets at every
+    # frequency (multisite_butanol only), each with its own capacity, theta
+    # mapping and mechanism profiles. Flip-flops between sites are scaled by
+    # exchange_intersite_factor (0 = sites exchange only internally).
+    site_resolved: bool = False
+    exchange_intersite_factor: float = 1.0
+    # Nuclear dipolar reservoir (Provotorov thermal mixing). State variable
+    # beta_d is the dipolar inverse temperature in 1/R units, energy
+    # E_d = -C_d beta_d with C_d = dipolar_capacity_ratio * sum(mu R^2).
+    # Off-resonant RF absorption and flip-flops between packets of different
+    # frequency exchange their energy mismatch with the reservoir (detailed
+    # balance to first order in beta_d * offset). dipolar_exchange_coupling
+    # scales the flip-flop part (0 = RF-only Provotorov coupling).
+    dipolar_enabled: bool = False
+    dipolar_capacity_ratio: float = 1.0
+    dipolar_relaxation_rate: float = 0.0
+    dipolar_beta_lattice: float = 0.0
+    dipolar_beta_initial: float = 0.0
+    dipolar_exchange_coupling: float = 1.0
+
     # Integration and display parameters.
     dt: float = 0.0015
     noise_sigma: float = 0.0
+
+    # Instantaneous AFP (discrete population swap; not a timed RF schedule).
+    afp_efficiency: float = 1.0
+    afp_subset_indices: Optional[list] = None
 
 
 class Spin1Model:
@@ -216,7 +324,14 @@ class Spin1Model:
         self.dR = float(self.Rplus[1] - self.Rplus[0])
 
         # The analytic branch density replaces the toy 1/sqrt(1-R) powder law.
-        density = normalized_component(self.Rplus, +1, gamma=p.line_gamma, asym=p.line_asym)
+        if p.line_model == 'multisite_butanol':
+            if p.orientation_corr_fraction != 0:
+                raise ValueError('Multisite orientation correlation requires site-resolved geometry')
+            density = self._multisite_density()
+        elif p.line_model == 'single_pake':
+            density = normalized_component(self.Rplus, +1, gamma=p.line_gamma, asym=p.line_asym)
+        else:
+            raise ValueError('Unknown line_model')
         mu = density * self.dR
         self.mu = mu / mu.sum()
         self.base_density = self.mu / self.dR
@@ -246,6 +361,16 @@ class Spin1Model:
         self._cross_i = np.empty(0, dtype=np.int64)
         self._cross_j = np.empty(0, dtype=np.int64)
         self._cross_base = np.empty(0, dtype=float)
+        self._pre_afp_state: Optional[np.ndarray] = None
+        self._afp_last_subset: List[int] = []
+
+    def _multisite_density(self):
+        from .multisite_lineshape import absorption_density
+        p = self.params
+        return absorption_density(self.Rplus, cd_scale=p.line_cd_scale_R,
+            od_ratio=p.line_od_scale_ratio, hwhm=p.line_gamma,
+            eta_cd=p.line_eta_cd, eta_od=p.line_eta_od,
+            od_fraction=p.line_od_fraction, points=p.line_phi_points)
 
     def _compute_display_calibration(self) -> float:
         p = self.params
@@ -260,7 +385,8 @@ class Spin1Model:
             # Fall back to a well-behaved calibration point.
             pref_cal = level_populations_from_PQ(0.50, None)
             minor_diff = abs(float(pref_cal[ZERO] - pref_cal[MINUS]))
-        raw = pake_component_raw(self.Rplus, +1, gamma=p.line_gamma, asym=p.line_asym)
+        raw = (self._multisite_density() if p.line_model == 'multisite_butanol' else
+               pake_component_raw(self.Rplus, +1, gamma=p.line_gamma, asym=p.line_asym))
         raw_area = trapezoid_integral(raw, self.Rplus)
         if raw_area <= 0 or not np.isfinite(raw_area):
             return float(p.display_scale)
@@ -288,6 +414,51 @@ class Spin1Model:
 
     def set_rf_enabled(self, enabled: bool) -> None:
         self.params.rf_enabled = bool(enabled)
+
+    def afp_target_state(
+        self,
+        n: Optional[np.ndarray] = None,
+        subset_indices: Optional[Sequence[int]] = None,
+        *,
+        efficiency: Optional[float] = None,
+    ):
+        """Return the AFP-swapped packet state without mutating ``self.n``."""
+        state = self.n if n is None else n
+        out = np.array(state, copy=True)
+        if subset_indices is None:
+            subset_indices = self.params.afp_subset_indices
+        if subset_indices is None:
+            subset: List[int] = []
+        else:
+            subset = [int(i) for i in subset_indices]
+        eff = self.params.afp_efficiency if efficiency is None else float(efficiency)
+        if subset:
+            perform_afp_on_populations(
+                out[:, PLUS], out[:, ZERO], out[:, MINUS], subset, efficiency=eff
+            )
+        return out, subset
+
+    def afp_sweep(self, subset_indices: Optional[Sequence[int]] = None) -> List[int]:
+        """Instantaneous AFP on ``subset_indices`` (sweep frequencies only).
+
+        Each index i swaps n+↔n0 at i and n0↔n− at mirror(i). Do not also pass
+        mirror indices in the subset or AFP is applied twice. Only those
+        packets are written; all other bins are left unchanged.
+        """
+        if subset_indices is not None:
+            self.params.afp_subset_indices = [int(i) for i in subset_indices]
+        self._pre_afp_state = self.n.copy()
+        target, subset = self.afp_target_state(
+            self.n,
+            self.params.afp_subset_indices,
+            efficiency=self.params.afp_efficiency,
+        )
+        n_bins = len(self.n)
+        touched = sorted({i for i in subset} | {n_bins - 1 - i for i in subset})
+        for k in touched:
+            self.n[k] = target[k]
+        self._afp_last_subset = list(subset)
+        return list(subset)
 
     def set_dnp_enabled(self, enabled: bool) -> None:
         self.params.dnp_enabled = bool(enabled)
@@ -447,7 +618,11 @@ class Spin1Model:
         if gamma_rf is None:
             gamma_rf = self.params.gamma_rf
         v_plus, v_minus = self.rf_profile_arrays(center_R)
-        capacity = self.capacity_rate_weights()
+        if self.params.rf_response_mode == 'spectral':
+            if not np.allclose(self.Rplus,-self.Rplus[::-1],rtol=0,atol=1e-12):
+                raise ValueError('Spectral RF requires a symmetric frequency grid')
+            return self.rf_rate_operator().rates(float(gamma_rf)*v_plus)
+        capacity = self.rf_rate_weights()
         scale = float(gamma_rf)
         return scale * capacity * v_plus, scale * capacity * v_minus
 
@@ -577,6 +752,8 @@ class Spin1Model:
 
     def static_plot_signal_reference(self):
         """Return the exact positive-P Plot_Signal-style static reference for comparison."""
+        if self.params.line_model == 'multisite_butanol':
+            return self.reference_spectrum()
         from .lineshape import plot_signal_reference
         return plot_signal_reference(
             self.Rplus,
@@ -586,18 +763,97 @@ class Spin1Model:
             divisor=self.params.plot_divisor,
         )
 
+    # ---- MaterialTuning-8 per-packet mechanism profiles -------------------
+    def packet_site_geometry(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Return (w_od, cos2_cd, cos2_od) for each packet on the + branch.
+
+        w_od is the fraction of the packet's absorption from O-D at its
+        frequency (0 for single_pake). cos2 maps the packet frequency to the
+        site orientation with the eta=0 relation x = 1 - 3 cos^2(theta)
+        (x = R / site splitting scale; horn x=1 is theta=90 deg, shoulder x=-2
+        is theta=0). Lorentzian wings beyond the static edges are clipped.
+        """
+        p = self.params
+        key = (p.line_model, p.n_bins, p.r_min, p.r_max, p.line_gamma, p.line_asym, p.line_cd_scale_R,
+               p.line_od_scale_ratio, p.line_eta_cd, p.line_eta_od, p.line_od_fraction, p.line_phi_points)
+        if getattr(self, '_geometry_key', None) == key:
+            return self._geometry
+        R = self.Rplus
+        if p.line_model == 'multisite_butanol':
+            from .multisite_lineshape import site_components
+            cd, od = site_components(R, epsilon=1, cd_scale=p.line_cd_scale_R, od_ratio=p.line_od_scale_ratio,
+                hwhm=p.line_gamma, eta_cd=p.line_eta_cd, eta_od=p.line_eta_od,
+                od_fraction=p.line_od_fraction, points=p.line_phi_points)
+            a_cd = np.maximum(-cd.imag, 0.); a_od = np.maximum(-od.imag, 0.); tot = a_cd + a_od
+            w_od = np.divide(a_od, tot, out=np.zeros_like(tot), where=tot > 0)
+            c2_cd = np.clip((1. - R/p.line_cd_scale_R)/3., 0., 1.)
+            c2_od = np.clip((1. - R/(p.line_cd_scale_R*p.line_od_scale_ratio))/3., 0., 1.)
+        else:
+            a = float(p.line_asym)
+            w_od = np.zeros_like(R)
+            c2_cd = np.clip((1. - a - R)/(3. - a), 0., 1.)
+            c2_od = c2_cd.copy()
+        self._geometry_key = key
+        self._geometry = (w_od, c2_cd, c2_od)
+        return self._geometry
+
+    def _density_power_profile(self, exponent: float, clip: float) -> np.ndarray:
+        """Clipped (density/mean)**exponent, renormalized to mu-weighted mean one."""
+        if exponent == 0:
+            return np.ones_like(self.mu)
+        density = np.maximum(self.base_density, 0.0)
+        mean = float(np.average(density, weights=self.mu))
+        with np.errstate(divide='ignore', invalid='ignore', over='ignore'):
+            w = (density/mean)**float(exponent)
+        w = np.nan_to_num(w, nan=clip, posinf=clip, neginf=1.0/clip)
+        w = np.clip(w, 1.0/clip, clip)
+        return w/float(np.average(w, weights=self.mu))
+
+    def mechanism_profile(self, prefix: str) -> np.ndarray:
+        """Per-packet factor f_X for prefix in rf_coupling, rf_width, exchange, dnp, t1."""
+        p = self.params
+        a2 = float(getattr(p, prefix+'_theta_p2')); a4 = float(getattr(p, prefix+'_theta_p4'))
+        od = float(getattr(p, prefix+'_od_factor'))
+        exponent = float(getattr(p, prefix+'_density_exponent', 0.0))
+        clip = float(getattr(p, prefix+'_density_clip', 12.0))
+        if a2 == 0 and a4 == 0 and od == 1 and exponent == 0:
+            return np.ones_like(self.mu)
+        w_od, c2_cd, c2_od = self.packet_site_geometry()
+        def angular(c2):
+            return 1. + a2*(1.5*c2 - .5) + a4*(35.*c2*c2 - 30.*c2 + 3.)/8.
+        f = (1. - w_od)*angular(c2_cd) + w_od*od*angular(c2_od)
+        if not np.all(np.isfinite(f)) or np.any(f <= 0):
+            raise ValueError(f'{prefix} profile must be positive and finite on every packet')
+        return f*self._density_power_profile(exponent, clip)
+
+    def rf_hwhm_profile(self) -> np.ndarray:
+        """Homogeneous RF HWHM of each receiving packet (spectral mode)."""
+        return float(self.params.rf_homogeneous_hwhm_R)*self.mechanism_profile('rf_width')
+
+    def exchange_profile(self) -> np.ndarray:
+        return self.mechanism_profile('exchange')
+
+    def dnp_rate_weights(self) -> np.ndarray:
+        """DNP pumping weight per packet: inherited density weight times the V8 profile."""
+        return self.capacity_rate_weights()*self.mechanism_profile('dnp')
+
+    def t1_rate_profile(self) -> np.ndarray:
+        return float(self.params.t1_rate)*self.mechanism_profile('t1')
+
     def capacity_rate_weights(self) -> np.ndarray:
         """Return Pake-density rate multipliers with mu-weighted average one.
 
-        The packet density is the broadened Pake branch density used to initialize
-        the line.  It is a proxy for how many spins and how much transition
-        strength reside in an equal-width R bin.  Applying it as a rate multiplier
-        makes DNP fill and RF depolarization fastest at the horns/theta=90 deg
-        regions while leaving the GUI rate knobs as material-scale averages.
+        This is the inherited empirical DNP response; legacy mode also uses it
+        for RF. Packet spin count is already represented by mu, so this extra
+        density weighting is a response assumption, not a consequence of spin
+        count. Independent RF mode uses rf_rate_weights() instead.
         """
-        p = self.params
-        power = max(0.0, float(p.capacity_rate_power))
-        clip = max(1.0, float(p.capacity_rate_clip))
+        return self._density_rate_weights(self.params.capacity_rate_power,
+                                          self.params.capacity_rate_clip)
+
+    def _density_rate_weights(self, power, clip) -> np.ndarray:
+        power = max(0.0, float(power))
+        clip = max(1.0, float(clip))
         key = (power, clip)
         if getattr(self, "_capacity_cache_key", None) == key and getattr(self, "_capacity_cache", None) is not None:
             return self._capacity_cache
@@ -624,12 +880,94 @@ class Spin1Model:
         self._capacity_cache = w
         return w
 
+    def rf_pedestal_profile(self) -> np.ndarray:
+        """Dimensionless RF gain at physical R; exactly one in both peak bands.
+
+        The cubic smoothstep is bounded, with zero slope at both ends. Its even
+        symmetry lets the same packet array serve both mirrored transitions.
+        No normalization follows the boost: peak rates must stay fixed.
+        """
+        p = self.params
+        if p.rf_response_mode in ("legacy", "spectral"):
+            return np.ones_like(self.Rplus)
+        if p.rf_response_mode != "independent":
+            raise ValueError("Unknown rf_response_mode")
+        distance = np.abs(np.abs(self.Rplus) - p.rf_peak_center_R)
+        x = np.clip((distance-p.rf_peak_half_width_R)/p.rf_transition_width_R, 0., 1.)
+        return 1. + (p.rf_pedestal_gain-1.)*x*x*(3.-2.*x)
+
+    def rf_rate_weights(self) -> np.ndarray:
+        """Per-spin RF response, independently tunable from DNP in the new mode."""
+        p = self.params
+        if p.rf_response_mode == "legacy":
+            return self.capacity_rate_weights()
+        if p.rf_response_mode == "spectral":
+            # Unit-carrier on-resonance pair rate; finite-width commands must
+            # use rf_rate_operator(), not multiply this array by U directly.
+            return self.rf_packet_response()*(p.rf_spectral_strength/self.rf_hwhm_profile())
+        base = self._density_rate_weights(p.rf_density_power, p.rf_density_clip)
+        return base*self.rf_pedestal_profile()
+
+    def rf_packet_response(self) -> np.ndarray:
+        """State-independent empirical RF coupling relative to spectral mode.
+
+        The density ratio is a tuning proxy, not an additional spin count or
+        microscopic law. The same packet coefficient multiplies both of its
+        transitions, preserving their mirror relationship. The strongest
+        packet and packets outside the tapered peak bands are unchanged.
+        """
+        p = self.params
+        if p.rf_response_mode != 'spectral':
+            return np.ones_like(self.mu)
+        out = np.ones_like(self.mu)
+        distance = np.abs(np.abs(self.Rplus) - p.rf_peak_center_R)
+        x = np.clip((distance-p.rf_peak_half_width_R)/p.rf_transition_width_R, 0., 1.)
+        step = x*x*(3.-2.*x)          # 0 inside the peak bands, 1 outside the taper
+        if p.rf_peak_selectivity != 0:
+            density = self._density_rate_weights(1., 12.)
+            relative = density / np.max(density)
+            out = 1. + (1. - step)*(relative**p.rf_peak_selectivity - 1.)
+        # V8: whole-line density/orientation/site coupling and pedestal gain.
+        if p.rf_coupling_pedestal_gain != 1:
+            out = out*(1. + (p.rf_coupling_pedestal_gain - 1.)*step)
+        if getattr(self, '_band_only', False):
+            return out
+        return out*self.mechanism_profile('rf_coupling')
+
+    def rf_band_response(self) -> np.ndarray:
+        """rf_packet_response without the per-packet mechanism profile (for site-resolved use)."""
+        self._band_only = True
+        try:
+            return self.rf_packet_response()
+        finally:
+            self._band_only = False
+
+    def rf_rate_operator(self):
+        from .spectral_rf import RFRateOperator
+        p = self.params
+        weights = self.rf_rate_weights()
+        hwhm = self.rf_hwhm_profile() if p.rf_response_mode == 'spectral' else None
+        uniform = hwhm is None or np.all(hwhm == hwhm[0])
+        key = (p.rf_response_mode, p.rf_spectral_strength, p.rf_homogeneous_hwhm_R,
+               len(self.Rplus), float(self.Rplus[0]), float(self.Rplus[-1]), weights.tobytes(),
+               None if uniform else hwhm.tobytes())
+        if getattr(self, '_rf_operator_key', None) != key:
+            kwargs = (dict(strength=p.rf_spectral_strength,
+                           hwhm=p.rf_homogeneous_hwhm_R if uniform else hwhm,
+                           packet_response=self.rf_packet_response())
+                      if p.rf_response_mode == 'spectral' else {})
+            self._rf_operator = RFRateOperator(self.Rplus, weights, **kwargs)
+            self._rf_operator_key = key
+        return self._rf_operator
+
     def local_capacity_factors(self, R: Optional[float] = None) -> Dict[str, float]:
         """Return local Pake-density capacities/rate weights at a physical R."""
         if R is None:
             R = self.params.rf_burn_R
         kp, km = self.branch_indices(R)
-        w = self.capacity_rate_weights()
+        w = self.dnp_rate_weights()
+        rf = self.rf_rate_weights()
+        boost = self.rf_pedestal_profile()
         out = {
             "R": float(R),
             "w_Iplus_R": np.nan,
@@ -638,15 +976,21 @@ class Spin1Model:
             "density_Iminus_R": np.nan,
             "mu_Iplus_R": np.nan,
             "mu_Iminus_R": np.nan,
+            "rf_weight_Iplus_R": np.nan,
+            "rf_weight_Iminus_R": np.nan,
+            "rf_pedestal_gain_R": np.nan,
         }
         if kp is not None:
             out["w_Iplus_R"] = float(w[kp])
             out["density_Iplus_R"] = float(self.base_density[kp])
             out["mu_Iplus_R"] = float(self.mu[kp])
+            out["rf_weight_Iplus_R"] = float(rf[kp])
+            out["rf_pedestal_gain_R"] = float(boost[kp])
         if km is not None:
             out["w_Iminus_R"] = float(w[km])
             out["density_Iminus_R"] = float(self.base_density[km])
             out["mu_Iminus_R"] = float(self.mu[km])
+            out["rf_weight_Iminus_R"] = float(rf[km])
         return out
 
     def effective_local_rates(self, R: Optional[float] = None) -> Dict[str, float]:
@@ -666,8 +1010,8 @@ class Spin1Model:
         vm = at(v_minus, km)
         opposite_plus_packet = at(v_minus, kp)
         opposite_minus_packet = at(v_plus, km)
-        wp = cap["w_Iplus_R"]
-        wm = cap["w_Iminus_R"]
+        wp = cap["rf_weight_Iplus_R"]
+        wm = cap["rf_weight_Iminus_R"]
         return {
             **cap,
             "rf_profile_Iplus_R": vp,
@@ -684,8 +1028,8 @@ class Spin1Model:
                 float(p.gamma_rf * wm * opposite_minus_packet)
                 if np.isfinite(wm) and np.isfinite(opposite_minus_packet) else np.nan
             ),
-            "dnp_Iplus_R": float(p.dnp_rate * wp) if np.isfinite(wp) else np.nan,
-            "dnp_Iminus_R": float(p.dnp_rate * wm) if np.isfinite(wm) else np.nan,
+            "dnp_Iplus_R": float(p.dnp_rate * cap["w_Iplus_R"]),
+            "dnp_Iminus_R": float(p.dnp_rate * cap["w_Iminus_R"]),
         }
 
     def packet_spectrum(self, use_reference: bool = False, noise_sigma: Optional[float] = None):
@@ -882,6 +1226,23 @@ class Spin1Model:
                 shape=(N,N)).tocsr()
             self._cross_matrix = _coo_matrix(
                 (self._cross_base,(self._cross_i,self._cross_j)),shape=(N,N)).tocsr()
+
+        # Full Lorentzian tails make these "sparse" matrices almost dense.
+        # On an uncorrelated symmetric uniform grid the same pair sums are
+        # Toeplitz/Hankel products, as in FrozenDynamics. Keep the explicit
+        # kernels for diagnostics and for correlated / hard-cutoff cases.
+        self._diffusion_fft = None
+        cut_bins = cutoff * width / self.dR
+        ambiguous_cutoff = cutoff > 0 and abs(cut_bins-round(cut_bins)) < 1e-9
+        if (self.params.orientation_corr_fraction == 0 and not ambiguous_cutoff
+                and np.allclose(self.Rplus, -self.Rplus[::-1], rtol=0, atol=1e-12)):
+            column = self._spectral_overlap(np.arange(N)*self.dR)
+            self._diffusion_fft_length = next_fast_len(2*N-1)
+            embed = np.zeros(self._diffusion_fft_length)
+            embed[:N] = column
+            embed[-N+1:] = column[1:][::-1]
+            self._diffusion_fft = rfft(embed)[:, None]
+            self._diffusion_cross_diagonal = .5*self._spectral_overlap(2*self.Rplus)
         self._diffusion_kernel_key = key
 
     def _dq_correlation_matrix(self) -> Optional[np.ndarray]:
@@ -923,12 +1284,13 @@ class Spin1Model:
         if scale == 0.0 or ratio == 0.0:
             return result
         C = self._dq_correlation_matrix()
+        sx = np.sqrt(self.exchange_profile())   # V8 pair factor sqrt(f_i f_j)
         if C is None:
-            incoming_plus = float(np.sum(self.n[:, PLUS]))
-            incoming_minus = float(np.sum(self.n[:, MINUS]))
+            incoming_plus = sx*float(np.sum(sx*self.n[:, PLUS]))
+            incoming_minus = sx*float(np.sum(sx*self.n[:, MINUS]))
         else:
-            incoming_plus = C @ self.n[:, PLUS]
-            incoming_minus = C @ self.n[:, MINUS]
+            incoming_plus = sx*(C @ (sx*self.n[:, PLUS]))
+            incoming_minus = sx*(C @ (sx*self.n[:, MINUS]))
         flow = (scale * ratio) * (self.n[:, MINUS]*incoming_plus
                                  - self.n[:, PLUS]*incoming_minus)
         result[:, PLUS] = flow
@@ -938,7 +1300,8 @@ class Spin1Model:
     def _dq_connectivity(self, scale: float) -> np.ndarray:
         """Population-independent outgoing-rate bound for the DQ current."""
         C = self._dq_correlation_matrix()
-        weights = 1.0-self.mu if C is None else C @ self.mu
+        sx = np.sqrt(self.exchange_profile())
+        weights = (sx*(float(np.sum(sx*self.mu))-sx*self.mu) if C is None else sx*(C @ (sx*self.mu)))
         return scale*float(self.params.double_quantum_ratio)*weights
 
     def recovery_equilibrium_diagnostics(self) -> Dict[str, object]:
@@ -998,6 +1361,11 @@ class Spin1Model:
         conn_cross_plus = self._cross_row_plus
         conn_cross_minus = self._cross_row_minus
         mu_safe = np.maximum(self.mu, 1e-30)
+        # V8 pair factors sqrt(f_i f_j) <= sqrt(f_i) max(sqrt(f)): a safe overbound.
+        sx = np.sqrt(self.exchange_profile()); bound = sx*float(sx.max())
+        conn_same = conn_same*bound
+        conn_cross_plus = conn_cross_plus*bound
+        conn_cross_minus = conn_cross_minus*bound
         return {
             "same_plus0": scale * conn_same / mu_safe,
             "same_0minus": scale * conn_same / mu_safe,
@@ -1031,11 +1399,53 @@ class Spin1Model:
         pm = frac[:, MINUS]
         mw = float(self.params.microwave_diffusion_factor) if dnp_on else 1.0
         scale = float(self.params.diffusion_scale) * mw
+        # V8 per-packet exchange factors enter every pair as sqrt(f_i f_j):
+        # replacing H by diag(s) H diag(s) keeps each current reversible and
+        # conservative (s = 1 reproduces MaterialTuning-7 exactly).
+        sx = np.sqrt(self.exchange_profile())
+        scaled = not np.all(sx == 1.0)
+        sc = sx[:, None]
+
+        if self._diffusion_fft is not None:
+            # Work with populations (which already include mu), not fractions:
+            # the mu_i*mu_j capacities in the pair currents cancel exactly.
+            # Padding to >=2N-1 retains the finite-grid tails without wrapping.
+            N = len(self.mu)
+            def convolve(value):
+                return irfft(self._diffusion_fft*rfft(
+                    value, n=self._diffusion_fft_length, axis=0),
+                    n=self._diffusion_fft_length, axis=0)[:N]
+
+            Hn = sc*convolve(sc*self.n) if scaled else convolve(self.n)
+            plus_flow = scale*(self.n[:,ZERO]*Hn[:,PLUS]-self.n[:,PLUS]*Hn[:,ZERO])
+            minus_flow = scale*(self.n[:,MINUS]*Hn[:,ZERO]-self.n[:,ZERO]*Hn[:,MINUS])
+            dn_p = np.zeros_like(self.n)
+            dn_m = np.zeros_like(self.n)
+            dn_x = np.zeros_like(self.n)
+            dn_p[:,PLUS] = plus_flow
+            dn_p[:,ZERO] = -plus_flow
+            dn_m[:,ZERO] = minus_flow
+            dn_m[:,MINUS] = -minus_flow
+            if float(self.params.cross_branch_ratio) > 0:
+                if scaled:
+                    ns = sc*self.n
+                    Xn = sc*(convolve(ns[::-1])-self._diffusion_cross_diagonal[:,None]*ns)
+                else:
+                    Xn = convolve(self.n[::-1])-self._diffusion_cross_diagonal[:,None]*self.n
+                kx = scale*float(self.params.cross_branch_ratio)
+                cross_plus = kx*(self.n[:,ZERO]*Xn[:,ZERO]-self.n[:,PLUS]*Xn[:,MINUS])
+                cross_minus = kx*(self.n[:,ZERO]*Xn[:,ZERO]-self.n[:,MINUS]*Xn[:,PLUS])
+                dn_x[:,PLUS] = cross_plus
+                dn_x[:,MINUS] = cross_minus
+                dn_x[:,ZERO] = -cross_plus-cross_minus
+            return {"diff_plus0": dn_p, "diff_0minus": dn_m,
+                    "diff_cross": dn_x,
+                    "diff_double_quantum": self._double_quantum_term(scale)}
 
         if self._same_matrix is not None:
             # Algebraic grouping of forward-minus-reverse pair currents.
             H = self._same_matrix
-            Hp = H @ frac
+            Hp = sc*(H @ (sc*frac)) if scaled else H @ frac
             plus_flow = scale*(p0*Hp[:,PLUS]-pp*Hp[:,ZERO])
             minus_flow = scale*(pm*Hp[:,ZERO]-p0*Hp[:,MINUS])
             dn_p = np.zeros_like(self.n)
@@ -1047,8 +1457,8 @@ class Spin1Model:
             dn_m[:,MINUS] = -minus_flow
             if self._cross_base.size and float(self.params.cross_branch_ratio) > 0:
                 X = self._cross_matrix
-                Xp = X @ frac
-                Xtp = X.T @ frac
+                Xp = sc*(X @ (sc*frac)) if scaled else X @ frac
+                Xtp = sc*(X.T @ (sc*frac)) if scaled else X.T @ frac
                 kx = scale*float(self.params.cross_branch_ratio)
                 cross_plus = kx*(p0*Xp[:,ZERO]-pp*Xp[:,MINUS])
                 cross_minus = kx*(p0*Xtp[:,ZERO]-pm*Xtp[:,PLUS])
@@ -1064,7 +1474,7 @@ class Spin1Model:
         if self._same_base.size:
             i = self._same_i
             j = self._same_j
-            K = scale * self._same_base
+            K = scale * self._same_base * (sx[i]*sx[j] if scaled else 1.0)
             Jp = K * (p0[i] * pp[j] - pp[i] * p0[j])
             np.add.at(dn_p[:, PLUS], i, Jp)
             np.add.at(dn_p[:, ZERO], i, -Jp)
@@ -1076,7 +1486,7 @@ class Spin1Model:
         if self._same_base.size:
             i = self._same_i
             j = self._same_j
-            K = scale * self._same_base
+            K = scale * self._same_base * (sx[i]*sx[j] if scaled else 1.0)
             Jm = K * (pm[i] * p0[j] - p0[i] * pm[j])
             np.add.at(dn_m[:, ZERO], i, Jm)
             np.add.at(dn_m[:, MINUS], i, -Jm)
@@ -1089,7 +1499,7 @@ class Spin1Model:
         if cross_ratio != 0.0 and self._cross_base.size:
             i = self._cross_i
             j = self._cross_j
-            Kx = scale * cross_ratio * self._cross_base
+            Kx = scale * cross_ratio * self._cross_base * (sx[i]*sx[j] if scaled else 1.0)
             Jx = Kx * (p0[i] * p0[j] - pp[i] * pm[j])
             np.add.at(dn_x[:, PLUS], i, Jx)
             np.add.at(dn_x[:, ZERO], i, -Jx)
@@ -1205,14 +1615,14 @@ class Spin1Model:
             # Multiplying by the local Pake-density rate factor makes absolute
             # and fractional build visibly faster at the horns while preserving
             # the selected P_DNP_sat as the asymptotic state.
-            w = self.capacity_rate_weights()[:, None]
+            w = self.dnp_rate_weights()[:, None]
             dn_dnp = p.dnp_rate * w * (dnp_target - self.n)
         dn_terms["DNP_sat"] = dn_dnp
 
         dn_t1 = np.zeros_like(self.n)
         if p.t1_rate != 0.0:
             t1_target = self.equilibrium_reference(_clamp_p(p.t1_p_eq))
-            dn_t1 = p.t1_rate * (t1_target - self.n)
+            dn_t1 = self.t1_rate_profile()[:, None] * (t1_target - self.n)
         dn_terms["T1"] = dn_t1
 
         dn = sum(dn_terms.values())

@@ -1,8 +1,8 @@
-"""Ideal per-physical-bin RF control on the unchanged working population model.
+"""Ideal per-physical-bin RF control with the selected material response.
 
 Only the RF input and event-aware time stepping are extended. The Pake state,
-readout, capacity weights, spin-diffusion currents, DNP and T1 are inherited
-without changes from model.py. No Voigt function is evaluated on this path.
+readout, RF response, spin-diffusion currents, DNP and T1 are inherited
+from model.py. No Voigt function is evaluated on this path.
 """
 from __future__ import annotations
 from dataclasses import dataclass, replace
@@ -24,10 +24,11 @@ class IdealBinParams(Spin1Params):
 class IdealBinModel(Spin1Model):
     """One command per physical bin, shared by the two overlapping branches.
 
-    Commands are effective base equalization rates (not calibrated watts).
-    The inherited optional capacity weight multiplies these rates exactly once,
-    as in the working baseline. Set capacity_rate_power=0 for uniform per-spin
-    coupling; it also changes the inherited DNP weighting, as before.
+    Commands retain the old U scale (not calibrated watts). In spectral mode
+    they represent carrier power, proportional to B1 squared, and drive a
+    finite homogeneous response with optional empirical peak selectivity. Legacy mode
+    shares capacity_rate_power/clip with DNP. Independent mode uses
+    rf_density_power/clip and rf_pedestal_gain, leaving DNP weighting separate.
     """
     def __init__(self, params: Optional[Spin1Params] = None, program: Optional[PulseProgram] = None):
         super().__init__(params or IdealBinParams())
@@ -52,14 +53,97 @@ class IdealBinModel(Spin1Model):
         if saved is not None:
             saved.validate_grid(self.Rplus)
             self._compiled = saved.compile()
+        self._ext_core = None; self._ext_core_key = None
+        self.ext_n = None; self._ext_collapsed = None
+        self.beta_d = float(self.params.dipolar_beta_initial)
+        if self.extended_active():
+            self._ensure_ext_state()
 
-    def set_program(self, program: PulseProgram) -> None:
-        """Install a validated copy atomically. Stop RF; never reset populations."""
+    # ---- MaterialTuning-8 extended engine (site-resolved / dipolar) ------
+    def extended_active(self) -> bool:
+        return bool(self.params.site_resolved or self.params.dipolar_enabled)
+
+    def extended_core(self):
+        """Engine for the current parameters (rebuilt when kinetics change)."""
+        import json
+        from dataclasses import asdict
+        from .extended_core import ExtendedCore
+        volatile = {'rf_enabled', 'dnp_enabled', 'diffusion_enabled', 'dt', 'rf_burn_R', 'noise_sigma',
+                    'afp_subset_indices', 'afp_efficiency', 'p0', 'q0', 'dipolar_beta_initial'}
+        key = json.dumps({k: v for k, v in asdict(self.params).items() if k not in volatile}, sort_keys=True)
+        if self._ext_core_key != key:
+            self._ext_core = ExtendedCore(self)
+            self._ext_core_key = key
+        return self._ext_core
+
+    def _ensure_ext_state(self) -> None:
+        """Keep the site-resolved state consistent with the public bin totals.
+
+        If self.n was replaced externally (state edit, snapshot of totals, an
+        example script), totals are redistributed over sites with equal level
+        fractions per bin. AFP is applied site-wise exactly (see afp_sweep).
+        """
+        core = self.extended_core()
+        if (self.ext_n is None or self.ext_n.shape != (core.S, len(self.mu), 3)
+                or self._ext_collapsed is None or not np.array_equal(self._ext_collapsed, self.n)):
+            self.ext_n = core.split(self.n)
+            self._ext_collapsed = self.n.copy()
+
+    def set_extended_state(self, ext_n, beta) -> None:
+        core = self.extended_core()
+        ext_n = np.array(ext_n, dtype=float)
+        if ext_n.shape != (core.S, len(self.mu), 3) or not np.allclose(ext_n.sum(axis=2), core.mu, rtol=1e-10, atol=1e-15):
+            raise ValueError('Extended state does not match the site capacities')
+        self.ext_n = ext_n
+        self.n = ext_n.sum(axis=0); self._ext_collapsed = self.n.copy()
+        self.beta_d = float(beta)
+
+    def afp_sweep(self, subset_indices=None):
+        if not self.extended_active():
+            return super().afp_sweep(subset_indices)
+        self._ensure_ext_state()
+        if subset_indices is not None:
+            self.params.afp_subset_indices = [int(i) for i in subset_indices]
+        self._pre_afp_state = self.n.copy()
+        subset = []
+        new = self.ext_n.copy()
+        for s in range(new.shape[0]):
+            new[s], subset = self.afp_target_state(new[s], self.params.afp_subset_indices,
+                                                   efficiency=self.params.afp_efficiency)
+        self.set_extended_state(new, self.beta_d)
+        self._afp_last_subset = list(subset)
+        return list(subset)
+
+    def derivative(self, rf_on=None, dnp_on=None, breakdown=False):
+        """Extended mode: total derivative of the bin totals (breakdown uses the shared-site legacy terms)."""
+        if not self.extended_active() or breakdown:
+            return super().derivative(rf_on=rf_on, dnp_on=dnp_on, breakdown=breakdown)
+        rf_on = bool(self.params.rf_enabled) if rf_on is None else bool(rf_on)
+        dnp_on = bool(self.params.dnp_enabled) if dnp_on is None else bool(dnp_on)
+        self._ensure_ext_state()
+        u = self.commanded_rf_field() if rf_on else np.zeros(len(self.mu))
+        dn, _, _ = self.extended_core().rhs(self.ext_n, self.beta_d, u, dnp_on)
+        return dn.sum(axis=0)
+
+    def set_program(self, program: PulseProgram, *, integration_dt: Optional[float] = None) -> None:
+        """Install a validated copy and optional RF integration-step ceiling.
+
+        The ceiling belongs to this program, not the material time step. It
+        applies only while nonzero RF is actually delivered; normal simulation
+        time and RF-off recovery keep advancing at params.dt.
+        """
+        if integration_dt is not None:
+            if isinstance(integration_dt, bool):
+                raise ValueError('RF integration_dt must be positive and finite')
+            integration_dt = float(integration_dt)
+            if not math.isfinite(integration_dt) or integration_dt <= 0:
+                raise ValueError('RF integration_dt must be positive and finite')
         candidate = program.clone()
         candidate.validate_grid(self.Rplus)
         compiled = candidate.compile()
         self.program = candidate
         self._compiled = compiled
+        self.program_integration_dt = integration_dt
         self._epoch = None
         self._event_times_absolute = None
         self._command_override = None
@@ -135,12 +219,11 @@ class IdealBinModel(Spin1Model):
         return u, u[::-1].copy()
 
     def rf_rate_fields(self, center_R=None, gamma_rf=None) -> Tuple[np.ndarray, np.ndarray]:
-        u, um = self.rf_profile_arrays()
-        w = self.capacity_rate_weights()
+        u = self.commanded_rf_field()
         # gamma_rf in the baseline derivative is intentionally unused: rates
         # are supplied by the per-bin program, with program.gain as the sole
         # additional global multiplier. No automatic profile normalization.
-        return w*u, w*um
+        return self.rf_rate_operator().rates(u)
 
     def rf_profile_summary(self, center_R=None):
         u = self.commanded_rf_field()
@@ -173,14 +256,14 @@ class IdealBinModel(Spin1Model):
         command amplitude or duration. It prevents high multibin commands from
         being silently corrected by a positivity clamp.
         """
-        w = self.capacity_rate_weights()
+        w = self.dnp_rate_weights()
         out = np.zeros(len(self.Rplus))
         if rf_on:
             gp, gm = self.rf_rate_fields()
             out += gp+gm
         if dnp_on:
             out += float(self.params.dnp_rate)*w
-        out += float(self.params.t1_rate)
+        out += self.t1_rate_profile()
         if self.params.diffusion_enabled and self.params.diffusion_scale != 0:
             c = self.diffusion_connectivity(dnp_on=dnp_on)
             out += c['same_plus0']+c['same_0minus']+c['cross_plus']+c['cross_minus']
@@ -219,8 +302,40 @@ class IdealBinModel(Spin1Model):
                 self._command_override = (np.zeros(len(self.Rplus)) if self._epoch is None else
                                           self.program.gain*self._compiled.field_for_index(index).copy())
                 try:
+                    if self.extended_active():
+                        core = self.extended_core(); self._ensure_ext_state()
+                        u = self._command_override if rf_on else np.zeros(len(self.mu))
+                        bound = core.outgoing_bound(u, self.beta_d, dnp_on)
+                        max_h = math.inf if bound == 0 else 0.2/bound
+                        if (rf_on and self.program_integration_dt is not None
+                                and np.any(self._command_override > 0)):
+                            max_h = min(max_h, self.program_integration_dt)
+                        h = min(boundary-self.t,max_h)
+                        if h <= 0 or self.t+h <= self.t:
+                            raise ValueError("Unresolvable numerical substep at a pulse boundary")
+                        dn, dbeta, _ = core.rhs(self.ext_n, self.beta_d, u, dnp_on)
+                        candidate = self.ext_n + h*dn
+                        if not np.all(np.isfinite(candidate)) or np.any(candidate < -1e-13*core.mu[:,:,None]):
+                            raise FloatingPointError("Nonphysical population step; reduce dt or active rates")
+                        candidate = np.maximum(candidate, 1e-30)
+                        candidate *= core.mu[:,:,None]/np.maximum(candidate.sum(axis=2,keepdims=True),1e-30)
+                        self.ext_n = candidate
+                        self.beta_d = float(self.beta_d + h*dbeta)
+                        self.n = candidate.sum(axis=0); self._ext_collapsed = self.n.copy()
+                        if rf_on:
+                            exposure = h*self._command_override
+                            self.delivered_exposure += exposure
+                            self.total_delivered_exposure += exposure
+                        self.t = boundary if h == boundary-self.t else self.t+h
+                        self.last_substeps += 1
+                        if self.last_substeps > 200000:
+                            raise RuntimeError("Too many integration substeps; lower rates or steps/tick")
+                        continue
                     bound = self._max_outgoing_bound(rf_on,dnp_on)
                     max_h = math.inf if bound == 0 else 0.2/bound
+                    if (rf_on and self.program_integration_dt is not None
+                            and np.any(self._command_override > 0)):
+                        max_h = min(max_h, self.program_integration_dt)
                     h = min(boundary-self.t,max_h)
                     if h <= 0 or self.t+h <= self.t:
                         raise ValueError("Unresolvable numerical substep at a pulse boundary")
