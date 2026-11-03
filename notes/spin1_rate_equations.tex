@@ -1,0 +1,1174 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb,bm,siunitx}
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs,longtable,array}
+\usepackage[dvipsnames]{xcolor}
+\usepackage[colorlinks=true,linkcolor=NavyBlue,citecolor=NavyBlue,urlcolor=NavyBlue]{hyperref}
+
+\newcommand{\ket}[1]{\lvert #1\rangle}
+\newcommand{\bra}[1]{\langle #1\rvert}
+\newcommand{\avg}[1]{\left\langle #1\right\rangle}
+\newcommand{\Pt}{P_2}
+\newcommand{\status}[1]{\par\noindent\textbf{\textsf{Status:}} \emph{#1}\par}
+
+\title{Spin-1 Population Dynamics in Polarized Deuteron Targets:\\
+Mechanisms, Rate Equations, and Open Questions}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+These notes collect the physics that governs the level populations of an ensemble of spin-1
+nuclei (deuterons) in a dynamically polarized solid. They cover the Hamiltonian and powder
+spectrum, the reduction from the density matrix to rate equations, and every population-changing
+process relevant to polarized-target work:
+\begin{itemize}
+\item radio-frequency (RF) saturation and adiabatic fast passage (AFP);
+\item spin-lattice relaxation with separate vector and tensor channels;
+\item spectral spin diffusion with its three distinct spin-1 flip-flop channels;
+\item the nuclear dipolar reservoir (Provotorov theory);
+\item dynamic nuclear polarization by the solid effect, cross effect, thermal mixing and the
+differential solid effect.
+\end{itemize}
+The terms are assembled into one orientation- and site-resolved master equation, and we state
+its conservation laws and stationary states. Several general consequences for manipulating the
+tensor polarization follow directly from the structure of the equations. Throughout, we
+distinguish what is established theory, what is an effective closure, and what is not known
+for deuterated butanol or ammonia. Numbers quoted for d-butanol come from fits to UVA target
+data and are labelled as such.
+\end{abstract}
+
+\tableofcontents
+
+%==========================================================================================
+\section{Scope, levels of description, and notation}
+\label{sec:scope}
+
+The system is a frozen, amorphous solid (e.g.\ deuterated butanol C$_4$D$_9$OD or ND$_3$) at
+$T\simeq 1$\,K in $B_0\simeq 2.5$--$5$\,T, doped with paramagnetic centres (chemical radicals
+such as TEMPO or EHBA-Cr(V), or irradiation-induced radicals in ammonia) at concentration
+$c_e\sim 10^{19}$--$10^{20}$\,cm$^{-3}$ \cite{CrabbMeyer1997,Goertz2004,Meyer2004}. The
+deuteron is a spin $I=1$ nucleus with gyromagnetic ratio
+$\gamma_d/2\pi = 6.536$\,MHz/T, so $\omega_d/2\pi\simeq 32.7$\,MHz at 5\,T. Its electric
+quadrupole moment couples to the electric-field gradient (EFG) of the chemical bond
+\cite{CohenReif1957,Abragam1961,Wasylishen2012}.
+
+\paragraph{Three levels of description.}
+\begin{enumerate}
+\item \emph{Density matrix} of the coupled electron--nuclear system, with relaxation
+superoperators (Redfield theory) \cite{Abragam1961,Slichter1990}. This level is exact but
+intractable for $\sim 10^{22}$ spins.
+\item \emph{Spin-temperature (thermodynamic) theory}: weakly coupled reservoirs (electron
+Zeeman, electron dipolar, nuclear Zeeman, nuclear dipolar/quadrupolar), each internally
+equilibrated at its own inverse temperature
+\cite{Provotorov1962,Goldman1970,AbragamGoldman1978,AbragamGoldman1982}.
+\item \emph{Population (rate) equations} for the diagonal elements of the density matrix of
+spectrally resolved nuclear ``packets''. Coherences are adiabatically eliminated, and every
+process becomes a transition rate or a pair-exchange current. These notes work at this level
+and state explicitly where it fails.
+\end{enumerate}
+
+\paragraph{Notation.}
+\begin{itemize}
+\item Levels are $m\in\{+1,0,-1\}$. For a deuteron ($\gamma_d>0$) with
+$\mathcal H_Z=-\hbar\omega_d I_z$, the level $m=+1$ is lowest.
+\item Populations of the spins at orientation $\Omega$ (EFG principal axes relative to
+$\mathbf B_0$, polar angle $\theta$, azimuth $\phi$) and chemical site $s$ are
+$n_m(\Omega,s,t)$.
+\item Fractional populations within a packet are $p_m$, with $p_{+1}+p_0+p_{-1}=1$.
+\item Powder averages are written
+$\avg{f}=\frac{1}{4\pi}\int f\,d\Omega$; if $f$ is independent of $\phi$ this reduces to
+$\tfrac12\int_0^\pi f\sin\theta\,d\theta$.
+\end{itemize}
+
+\paragraph{Polarizations.}
+\begin{equation}
+P = \avg{n_{+1}-n_{-1}}, \qquad Q=\avg{n_{+1}+n_{-1}-2n_0}=1-3\avg{n_0}.
+\label{eq:PQ}
+\end{equation}
+Positivity of the populations restricts $(P,Q)$ to the triangle with vertices $(\pm1,1)$ and
+$(0,-2)$. A Boltzmann distribution with Zeeman inverse spin temperature $\beta$ gives
+$n_m\propto e^{m x}$ with $x=\beta\hbar\omega_d$, so that
+\begin{equation}
+P=\frac{2\sinh x}{1+2\cosh x},\qquad Q=\frac{2\cosh x-2}{1+2\cosh x}=2-\sqrt{4-3P^2}.
+\label{eq:boltzmann}
+\end{equation}
+Corrections of order $\omega_Q/\omega_d$ are discussed in Sec.~\ref{sec:equilibrium}. At
+$P=0.50$, Eq.~\eqref{eq:boltzmann} gives $Q=0.1972$ and
+$(p_{+1},p_0,p_{-1})=(0.616,0.268,0.116)$; these values are used for illustrations
+throughout.
+
+%==========================================================================================
+\section{Hamiltonian, transition frequencies and the powder spectrum}
+\label{sec:hamiltonian}
+
+\subsection{Zeeman and quadrupolar interactions}
+In its principal-axis system the quadrupolar Hamiltonian is
+\cite{CohenReif1957,Abragam1961,Wasylishen2012}
+\begin{equation}
+\mathcal H_Q=\frac{e^2qQ}{4I(2I-1)}\Big[3I_{z'}^2-I(I+1)+\eta\,(I_{x'}^2-I_{y'}^2)\Big],
+\end{equation}
+where $e^2qQ/h$ is the quadrupolar coupling constant and $0\le\eta\le1$ the EFG asymmetry.
+For aliphatic C--D bonds $e^2qQ/h\approx 160$--$170$\,kHz with $\eta\lesssim0.05$; for
+hydrogen-bonded O--D, typically 200--230\,kHz \cite{Wasylishen2012}.
+
+In high field, $|\mathcal H_Q|\ll\hbar\omega_d$. To first order only the part commuting with
+$I_z$ survives:
+\begin{equation}
+\mathcal H^{(1)}_Q=\frac{e^2qQ}{4}\,\Pt^\eta(\Omega)\,\big(3I_z^2-2\big)\qquad (I=1),
+\qquad
+\Pt^\eta(\Omega)\equiv \tfrac12\big(3\cos^2\theta-1+\eta\sin^2\theta\cos2\phi\big).
+\end{equation}
+The first-order energies are
+$E_m=-\hbar\omega_d m+\tfrac{e^2qQ}{4}\Pt^\eta(3m^2-2)$, and the two allowed ($\Delta m=\pm1$)
+transitions are
+\begin{equation}
+\boxed{\;
+\omega_{+}(\Omega)\equiv\omega_{+1\leftrightarrow0}=\omega_d-\omega_Q\,\Pt^\eta(\Omega),\qquad
+\omega_{-}(\Omega)\equiv\omega_{0\leftrightarrow-1}=\omega_d+\omega_Q\,\Pt^\eta(\Omega),
+\qquad \omega_Q\equiv\frac{3e^2qQ}{4\hbar}.\;}
+\label{eq:omegapm}
+\end{equation}
+\noindent\textbf{Convention.} With this definition:
+\begin{itemize}
+\item the separation of the two transitions at one orientation is $2\omega_Q|\Pt^\eta|$;
+\item the "horns" ($\theta=90^\circ$, $\eta=0$) lie at offsets $\pm\omega_Q/2$, and the
+outer "shoulders" ($\theta=0$) at $\pm\omega_Q$;
+\item both lines coincide at the magic angle ($\cos^2\theta=1/3$).
+\end{itemize}
+The two forms in the earlier draft differ by a factor of 6 in the definition of $\omega_Q$;
+Eq.~\eqref{eq:omegapm} is used everywhere below. For the d-butanol C--D site the fitted horn
+offset is $\omega_Q/4\pi=61.7$\,kHz, so $e^2qQ/h=164$\,kHz.
+
+\subsection{Second-order and smaller terms}
+\begin{itemize}
+\item \textbf{Second-order quadrupole shift.} For $I=1$ it is of order
+$\omega_Q^2/\omega_d\sim 0.5$\,kHz at 5\,T for C--D. It shifts \emph{both} transitions by the
+same orientation-dependent amount, so it does not change their splitting
+\cite{CohenReif1957,Wasylishen2012}. It is below the homogeneous width but not negligible for
+O--D.
+\item \textbf{Chemical-shift anisotropy} of $^2$H is a few ppm (about 0.1\,kHz): negligible.
+\item \textbf{D--D dipolar couplings} are of order 0.1--1\,kHz and set the homogeneous width
+(Sec.~\ref{sec:homogeneous}). D--H couplings matter if residual protons are present.
+\item \textbf{Hyperfine couplings} to the electrons shift deuterons within $\sim$1\,nm of a
+radical far out of the bulk line (Sec.~\ref{sec:barrier}).
+\end{itemize}
+
+\subsection{Homogeneous broadening}
+\label{sec:homogeneous}
+Each packet has a homogeneous width $\Gamma=1/T_2$. It sets three things: the RF response
+(Sec.~\ref{sec:rf}), the energy matching of flip-flops (Sec.~\ref{sec:diffusion}), and the local
+line $\varphi$ in Eq.~\eqref{eq:line}. Contributions, roughly in order of size for deuterated
+glasses at 1\,K:
+\begin{enumerate}
+\item \textbf{D--D dipolar couplings.} Van Vleck's second moment \cite{VanVleck1948,Abragam1961}
+weights neighbours whose transitions are resonant ("like") $9/4$ times more than non-resonant
+("unlike") ones. For quadrupole-split deuterons, resonance depends on the neighbour's
+orientation, so $\Gamma$ depends on the local density of matching transitions.
+\item \textbf{Couplings to residual protons} (heteronuclear, always "unlike").
+\item \textbf{Hyperfine fields of the paramagnetic centres.} These give a distribution of shifts,
+and they make the width position dependent (largest near radicals).
+\item \textbf{Molecular motion} (methyl tunnelling, librations). This can narrow or broaden,
+depending on rate.
+\item \textbf{Second-order quadrupole dispersion} for sites with a distribution of $\eta$ or
+$e^2qQ$. This is inhomogeneous; it is included in the line fit.
+\end{enumerate}
+The fitted common Lorentzian HWHM for d-butanol, 1.45\,kHz, is an average. Its dependence on
+orientation and site is \textbf{not measured}, and it is the main physical candidate for
+per-spin RF selectivity (Sec.~\ref{sec:selectivity}).
+
+\subsection{Pake density: the orientation Jacobian}
+\label{sec:pake}
+For one site with $\eta=0$, write the offset of a transition as
+$\delta=\omega-\omega_d=\mp\omega_Q\Pt(\cos\theta)$. The fraction of spins per unit offset is
+the orientation Jacobian \cite{Pake1948}:
+\begin{equation}
+g(\delta)=\frac{1}{|d\delta/d\cos\theta|}=\frac{1}{\sqrt3\,\omega_Q\sqrt{1+2\delta/\omega_Q}},
+\qquad \delta\in[-\omega_Q/2,\,\omega_Q],
+\label{eq:pakedensity}
+\end{equation}
+(for the branch whose offset is $+\omega_Q\Pt$; the other branch is mirrored).
+
+\begin{itemize}
+\item The density diverges at the horn ($\theta=90^\circ$) and falls to its edge value at
+$\theta=0$.
+\item With $\eta\neq0$ the three principal values of $\Pt^\eta$ are $1$ and
+$-(1\pm\eta)/2$. The divergence moves to $\delta=-(1-\eta)\omega_Q/2$, a new step edge
+appears at $-(1+\eta)\omega_Q/2$, and the far edge stays at $\omega_Q$
+\cite{CohenReif1957,Wasylishen2012}.
+\item Homogeneous broadening convolves each branch with the local line $\varphi$ (Lorentzian
+or Voigt). An analytic complex form of the broadened branch is given in
+Ref.~\cite{Dulya1997}.
+\end{itemize}
+
+Throughout, the \emph{capacity} $\mu$ of a spectral packet is the number of spins whose
+transition lies in that packet:
+\[
+\mu(\delta)\,d\delta = \text{(number of spins)}\times g(\delta)\,d\delta .
+\]
+\emph{The Jacobian is a density of states. It counts spins; it does not alter the physics of
+any single spin.} This distinction matters for the RF rates (Sec.~\ref{sec:rf}).
+
+\subsection{Several sites}
+\label{sec:sites}
+A molecule such as C$_4$D$_9$OD contains several deuteron sites. Each has its own $e^2qQ$,
+$\eta$ and dynamics:
+\begin{itemize}
+\item CD$_2$ and CD$_3$ groups;
+\item one O--D.
+\end{itemize}
+The spectrum is a weighted sum of Pake patterns. If a methyl group rotates rapidly, its
+effective coupling is scaled by $\Pt(\cos109.5^\circ)=-1/3$. At 1\,K, methyl rotation is
+frozen or proceeds only by tunnelling, and its effect on the line and on relaxation in
+d-butanol is not established.
+
+A fit of 2014 UVA d-butanol spectra with a two-site (C--D, O--D) azimuth-averaged model gave:
+\begin{itemize}
+\item O--D/C--D coupling ratio 1.35;
+\item $\eta_{CD}=0.065$ and $\eta_{OD}=0.033$;
+\item an effective O--D integrated weight of 2.1\%;
+\item a common Lorentzian HWHM of 1.45\,kHz;
+\item held-out RMS of 0.79\% of peak-to-peak.
+\end{itemize}
+A single-site model gave 0.80\%. The second site is therefore only weakly required, and its
+weight should not be read as a chemical abundance.
+
+\subsection{The two overlapping lines}
+\label{sec:overlap}
+At any frequency in the spectrum two different groups of spins absorb:
+\begin{itemize}
+\item the I$_+$ transition ($+1\leftrightarrow0$) of spins at orientation $\Omega_1$;
+\item the I$_-$ transition ($0\leftrightarrow-1$) of spins at the "mirror" orientation
+$\Omega_2$, with $\Pt^\eta(\Omega_2)=-\Pt^\eta(\Omega_1)$.
+\end{itemize}
+These are different molecules with different capacities. At the negative horn, for example,
+the I$_-$ transition belongs to the dense $\theta=90^\circ$ spins, while the overlapping
+I$_+$ belongs to sparse spins near $\theta\approx37^\circ$.
+
+\emph{Every manipulation of $Q$ is constrained by this overlap}
+(Sec.~\ref{sec:consequences}).
+
+\subsection{Observables}
+\label{sec:observables}
+The absorptive NMR signal is
+\begin{equation}
+I(\omega,t)=\sum_s\avg{\big(n_{+1}-n_0\big)\varphi(\omega-\omega_+)+\big(n_0-n_{-1}\big)\varphi(\omega-\omega_-)}_s ,
+\label{eq:line}
+\end{equation}
+with an overall sign set by the detector phase (the earlier draft used the opposite sign
+convention). Integrating over each line separately,
+\[
+A_+=\avg{n_{+1}-n_0},\qquad A_-=\avg{n_0-n_{-1}},\qquad
+A_++A_-=P,\qquad A_+-A_-=Q .
+\]
+\begin{itemize}
+\item The total area measures $P$.
+\item The area difference of the two branches measures $Q$.
+\item In equilibrium the peak-height ratio $r=I_+/I_-=e^{x}$ gives $P$ through
+Eq.~\eqref{eq:boltzmann}; this is the basis of the asymmetry method \cite{Dulya1997}.
+\end{itemize}
+After a manipulation the populations are no longer Boltzmann, so the ratio method fails. In
+that case $P$ and $Q$ must be obtained from full line-shape fits.
+
+%==========================================================================================
+\section{From the density matrix to rate equations}
+\label{sec:reduction}
+
+\subsection{Elimination of coherences}
+Take a pair of levels $a,b$ connected by an off-diagonal perturbation $V$ (an RF field, or the
+mixing term of a forbidden transition), with detuning $\Delta$ and coherence decay $1/T_2$.
+The coherence obeys
+\[
+\dot c_{ab}=-(1/T_2+i\Delta)c_{ab}+iV(n_a-n_b).
+\]
+When $|V|T_2\ll1$, or more generally when the coherence decays faster than the populations
+change, $c_{ab}$ follows the populations adiabatically. Substituting gives
+\cite{Abragam1961,Slichter1990}
+\begin{equation}
+\dot n_a=-W(n_a-n_b),\qquad
+W=\frac{2|V|^2T_2}{1+\Delta^2T_2^2}=2\pi|V|^2 g(\Delta),
+\label{eq:golden}
+\end{equation}
+where $g$ is the normalized homogeneous line. This is Fermi's golden rule with a Lorentzian
+line. For a non-Lorentzian homogeneous line, $g$ is replaced by the appropriate
+(e.g.\ Gaussian) shape function.
+
+\subsection{Validity}
+The rate description requires all of the following:
+\begin{enumerate}
+\item \textbf{Weak drive}, $\omega_1 T_2\lesssim1$, or at least that population changes be
+slow compared with $T_2$.
+\item \textbf{Phase-averaged carriers}: no coherent interference between simultaneously
+applied tones.
+\item \textbf{Secular approximation}: transitions separated by more than their widths are
+treated independently.
+\end{enumerate}
+When condition 1 fails:
+\begin{itemize}
+\item a resonant pulse produces nutation (at $\sqrt2\,\omega_1$ for a single spin-1
+transition) and spin locking;
+\item off-resonance irradiation is described by Redfield's rotating-frame thermodynamics
+\cite{Redfield1955} or Provotorov's two-temperature theory \cite{Provotorov1962}
+(Sec.~\ref{sec:provotorov});
+\item quadrupolar echoes and multiple-quantum coherences require the full spin-1 density
+matrix \cite{Wasylishen2012}.
+\end{itemize}
+
+\subsection{Packet representation}
+\label{sec:packets}
+Group spins into packets labelled by site $s$ and by the frequency $R$ of their I$_+$
+transition. Their I$_-$ transition then lies at the mirror frequency.
+
+\begin{itemize}
+\item The state is $n_m(R,s,t)=\mu_s(R)\,p_m(R,s,t)$.
+\item All spins in a packet share the same transition frequencies.
+\item Packets are therefore the natural variables: orientation enters only through the
+capacity $\mu_s(R)$ and through any orientation dependence of the rate coefficients (T$_2$,
+couplings).
+\end{itemize}
+
+Spins with different azimuth $\phi$ but the same frequency are lumped together when
+$\eta\neq0$. This is exact for every process that depends only on frequency. It is an
+approximation for processes that depend on the full orientation, such as spatial correlations
+of neighbours.
+
+%==========================================================================================
+\section{RF saturation (ss-RF) and per-spin selectivity}
+\label{sec:rf}
+
+Selective semi-saturating RF (ss-RF) burns spectral holes in the deuteron line to manipulate
+the tensor polarization \cite{KellerSSRF,Keller2017}.
+
+\subsection{Weak-drive rates for spin 1}
+A linearly polarized RF field contains a rotating component of amplitude $B_1$, with
+$\omega_1=\gamma_dB_1$. In the rotating frame $V=\omega_1 I_x$.
+
+\textbf{Matrix elements.} For spin 1,
+\[
+|\bra{+1}I_x\ket{0}|^2=|\bra{0}I_x\ket{-1}|^2=\tfrac12 .
+\]
+To first order in $\omega_Q/\omega_d$ these do not depend on orientation, because the
+quadrupole interaction does not mix the Zeeman eigenstates at that order.
+
+\textbf{Rate.} From Eq.~\eqref{eq:golden}, a carrier at $\omega_c$ drives a transition at
+$\omega_\pm$ with
+\begin{equation}
+W_\pm=\frac{\omega_1^2T_2}{1+(\omega_\pm-\omega_c)^2T_2^2},\qquad
+J_\pm=W_\pm\,\big(n_{\rm lower}-n_{\rm upper}\big).
+\label{eq:rfrate}
+\end{equation}
+\begin{itemize}
+\item A carrier exactly on resonance with a two-level pair equalizes it at rate $2W$; with
+lattice relaxation the steady state is $d=d_0/(1+2WT_1)$.
+\item Independent carriers (random relative phases) add in power: $W=\sum_c W^{(c)}$.
+\item RF power is proportional to $B_1^2$, so the rates are linear in power.
+\end{itemize}
+
+\subsection{Spin density does not enter the rate per spin}
+Equation~\eqref{eq:rfrate} contains $\omega_1$, the detuning and $T_2$. It does \emph{not}
+contain how many spins share the frequency $\omega_\pm$:
+\begin{itemize}
+\item the Pake Jacobian (the horn) puts more spins per hertz near $\theta=90^\circ$;
+\item each of those spins sees the same $B_1$ and has the same matrix element;
+\item $B_1$ is a field, not a resource shared among the spins: at the RF powers used, spin
+absorption is a negligible load on the coil.
+\end{itemize}
+Hence the absolute rate of polarization loss of a packet is proportional to its capacity $\mu$
+(through $n=\mu p$), but its \emph{fractional} saturation rate is not. A phenomenological rate
+proportional to the powder density (used in early models) counts the spins twice.
+
+\subsection{Physical sources of per-spin selectivity}
+\label{sec:selectivity}
+Selectivity means that the two overlapping transitions at one frequency (Sec.~\ref{sec:overlap})
+saturate at different fractional rates. It can only arise from differences in $\omega_1$, the
+matrix element, or $T_2$ between the two groups of spins, or from processes beyond single-spin
+saturation.
+
+\begin{enumerate}
+\item \textbf{Orientation- and site-dependent $T_2$.} On resonance, $W\propto T_2$ at fixed
+$\omega_1$. The homogeneous width comes from D--D and D--H dipolar couplings, from proximity
+to paramagnetic centres, and from molecular motion. All of these depend on molecular
+orientation and site (Sec.~\ref{sec:homogeneous}). This is the most direct physical route to
+selectivity, and it can be measured from narrow-hole widths.
+
+\item \textbf{The like-spin second moment.} In Van Vleck's theory \cite{VanVleck1948,Abragam1961},
+a dipolar neighbour contributes $9/4$ times more to the second moment when it is ``like''
+(resonant within the linewidth) than when it is ``unlike''. For quadrupole-split deuterons,
+a neighbour counts as like only if its transition matches within the homogeneous width. The
+homogeneous width at a frequency therefore grows with the local density of matching
+transitions, by up to $(9/4)^{1/2}=1.5$ in width. This is a genuine density-dependent
+per-spin effect. Its sign is to \emph{broaden} dense regions and so to lower their
+on-resonance rate.
+
+\item \textbf{Spatial $B_1$ inhomogeneity.} The coil, the target cup and the packing give a
+distribution of $\omega_1$ across the sample. It is uncorrelated with frequency, so it
+produces no selectivity. It does produce a slow, non-exponential tail of saturation (a
+candidate contributor to apparent plateaus, Sec.~\ref{sec:open}).
+
+\item \textbf{Hyperfine-shifted spins} near radicals are detuned and saturate differently
+(Sec.~\ref{sec:barrier}).
+
+\item \textbf{Collective effects.} Radiation damping and RF-induced changes of coil loading
+depend on the magnetization at a frequency. For deuterons at the signal levels of polarized
+targets they are expected to be small.
+\end{enumerate}
+
+\status{Eq.~\eqref{eq:rfrate} is established for weak drive. The orientation dependence of
+$T_2$ in d-butanol and ND$_3$ is \textbf{not measured}. No first-principles mechanism makes the
+rate per spin proportional to powder density.}
+
+\subsection{Strong drive, rotating-frame relaxation and coherent effects}
+When $\omega_1\gtrsim$ the local dipolar field, Eq.~\eqref{eq:golden} breaks down:
+\begin{itemize}
+\item \textbf{Off resonance:} the spin system reaches a rotating-frame spin temperature
+\cite{Redfield1955,Goldman1970}.
+\item \textbf{On resonance:} spin locking preserves the magnetization against saturation,
+which then decays with $T_{1\rho}$.
+\item \textbf{Pulsed operation:} nutation and quadrupolar echoes, which can invert populations
+rather than equalize them (AFP is the adiabatic limit, Sec.~\ref{sec:afp}).
+\end{itemize}
+In polarized-target practice the RF level is set by the Q-meter circuit. Whether
+$\omega_1T_2<1$ holds must be checked against a measured $B_1$ calibration.
+
+\subsection{Coupling of off-resonance RF to the nuclear dipolar reservoir}
+\label{sec:provotorov}
+Off-resonance RF transfers energy between the Zeeman system and the nuclear dipolar (and
+quadrupolar non-Zeeman) reservoir \cite{Provotorov1962,Goldman1970}.
+
+\textbf{Single homogeneous line.} Take a line at offset $\Delta$ from the RF, with
+rotating-frame Zeeman inverse temperature $\alpha$, dipolar inverse temperature $\beta$ and
+local field $D$ (in frequency units). Provotorov's equations are
+\begin{equation}
+\dot\alpha=-W(\Delta)(\alpha-\beta)-\frac{\alpha-\alpha_L}{T_{1Z}},\qquad
+\dot\beta=-W(\Delta)\frac{\Delta^2}{D^2}(\beta-\alpha)-\frac{\beta-\beta_L}{T_{1D}} .
+\label{eq:provotorov}
+\end{equation}
+
+\textbf{Packet form.} For an inhomogeneous (Pake) line at the population level, take a carrier
+at $\omega_c$ driving a transition at $\omega$. The current acquires a term that is first
+order in the dipolar inverse temperature $\beta_d$:
+\begin{equation}
+J=W\Big[(n_{\rm lower}-n_{\rm upper})-\hbar\beta_d(\omega-\omega_c)\,\tfrac12(n_{\rm lower}+n_{\rm upper})\Big],
+\qquad
+C_d\,\dot\beta_d=\sum(\omega-\omega_c)J+\dots
+\label{eq:rfdipolar}
+\end{equation}
+\begin{itemize}
+\item Absorption below resonance takes the energy mismatch from the reservoir and cools it.
+\item This is the nuclear analogue of dynamic cooling. It also makes RF hole shapes
+asymmetric.
+\end{itemize}
+
+\status{The theory is established \cite{Provotorov1962,Goldman1970,AbragamGoldman1982}. The
+heat capacity $C_d$ of the deuteron non-Zeeman reservoir in d-butanol, and its thermal contact
+with the quadrupole-split Zeeman packets, are \textbf{unknown}. The first-order form requires
+$\hbar\beta_d|\omega-\omega_c|\ll1$.}
+
+%==========================================================================================
+\section{Adiabatic fast passage}
+\label{sec:afp}
+A frequency or field sweep through a transition at rate $\dot\omega$ inverts it with
+Landau--Zener efficiency
+\begin{equation}
+\epsilon=1-\exp\!\Big(-\frac{\pi\,\Omega_R^2}{2|\dot\omega|}\Big)=1-\exp\!\Big(-\frac{\pi\,\omega_1^2}{|\dot\omega|}\Big),
+\qquad \Omega_R=2\,|\bra{a}\omega_1 I_x\ket{b}|=\sqrt2\,\omega_1 ,
+\end{equation}
+where $\Omega_R$ is the Rabi frequency of the isolated two-level transition (the other
+transition of the same spins is far off resonance). This holds provided the sweep is fast
+compared with $T_{1\rho}$ and slow compared with
+$\omega_1$ \cite{Abragam1961,Slichter1990,GarwoodDelaBarre2001}.
+
+\textbf{Effect at one frequency.} A sweep through frequency $R$ inverts both transitions
+there. It swaps $n_{+1}\leftrightarrow n_0$ for the packet whose I$_+$ lies at $R$, and
+$n_0\leftrightarrow n_{-1}$ for its mirror packet.
+
+\textbf{Gain in $Q$.} Using $Q=1-3\avg{n_0}$, the change from inverting at $R$ is
+\begin{equation}
+\Delta Q_{\rm AFP}(R)=3\epsilon\Big[\mu_{\rm m}\big(p_0-p_{-1}\big)_{\rm m}-\mu_{\rm i}\big(p_{+1}-p_0\big)_{\rm i}\Big],
+\label{eq:afpgain}
+\end{equation}
+where i is the packet whose I$_+$ lies at $R$ and m its mirror. The gain is positive where the
+mirror packet is more than $(p_{+1}-p_0)/(p_0-p_{-1})\approx2.3$ times denser (at $P=0.5$).
+
+Inversion moves twice the population that saturation does, so selective AFP windows can raise
+$Q$ well beyond what selective saturation can reach. For d-butanol the beneficial windows are
+the negative horn region and the outer positive region beyond the C--D edge.
+
+\textbf{Limits of the idealization.} The adiabatic condition, relaxation during the sweep,
+sweep edges, and a sweep passing through both transitions of the same spins (which gives a
+$+1\leftrightarrow-1$ exchange) limit real efficiencies.
+
+\status{Physics established. The selective-window efficiencies achievable in a polarized-target
+Q-meter set-up are \textbf{not measured}.}
+
+%==========================================================================================
+\section{Spin-lattice relaxation}
+\label{sec:t1}
+
+\subsection{Quadrupolar relaxation of spin 1}
+Fluctuations of the EFG (molecular motion and phonons) induce $\Delta m=\pm1$ transitions at
+rate $W_1$ and $\Delta m=\pm2$ transitions at rate $W_2$ \cite{Abragam1961,Wasylishen2012}.
+Linearizing about equilibrium,
+\begin{equation}
+\dot P=-(W_1+2W_2)(P-P_L),\qquad \dot Q=-3W_1(Q-Q_L),
+\label{eq:t1pq}
+\end{equation}
+with the rates defined per transition in each direction. Vector and tensor polarization
+therefore relax with \emph{different} times,
+\[
+T_{1Z}^{-1}=W_1+2W_2,\qquad T_{1Q}^{-1}=3W_1 ,
+\]
+and both depend on orientation through the spectral densities.
+
+\subsection{Paramagnetic relaxation}
+In doped targets, nuclear relaxation is dominated by the radicals. Nuclei near a centre relax
+directly through the fluctuating hyperfine field \cite{Bloembergen1949,Blumberg1960}. The bulk
+relaxes by spin diffusion towards those centres, in the diffusion-limited or rapid-diffusion
+regimes of Khutsishvili and Blumberg, which gives $T_1^{-1}\propto c_e$
+\cite{Blumberg1960,AbragamGoldman1978}. A treatment specific to polarized targets is given
+in \cite{JiZhi1999}. Both mechanisms are $\Delta m=\pm1$ dominated.
+
+\subsection{Lattice and spin-temperature equilibria}
+\label{sec:equilibrium}
+At the lattice temperature $T_L\simeq1$\,K, $P_L\approx 10^{-3}$. Under DNP, the nuclear
+Zeeman system instead approaches a spin temperature set by the electrons
+(Sec.~\ref{sec:dnp}).
+
+\textbf{Quadrupole corrections.} The full Boltzmann distribution includes the quadrupolar
+energy, $n_m\propto\exp[-\beta E_m]$. This gives orientation-dependent corrections to
+Eq.~\eqref{eq:boltzmann} of relative order $\beta\hbar\omega_Q$. At deuteron spin temperatures
+corresponding to $P\simeq0.5$ these are about $0.4\%$.
+
+\textbf{Separate quadrupolar order.} The tensor (quadrupolar-order) part can acquire its own
+temperature after a manipulation. It returns to the value set by $P$ only through processes
+that change $n_0$: lattice relaxation ($3W_1$), cross-branch spin flips
+(Sec.~\ref{sec:diffusion}), and DNP.
+
+\status{Mechanisms established. Orientation dependence, the $W_2/W_1$ ratio and the absolute
+$T_1$ of deuterons in d-butanol at 1\,K are \textbf{not separately measured}; in practice
+$T_1$ is hours to days.}
+
+%==========================================================================================
+\section{Spectral spin diffusion for spin 1}
+\label{sec:diffusion}
+
+\subsection{Dipolar flip-flops between quadrupole-split spins}
+Two deuterons $i,j$ couple through the secular dipolar Hamiltonian
+\cite{Abragam1961,Bloembergen1949}
+\[
+\mathcal H_{ij}=b_{ij}\big[2I_{zi}I_{zj}-\tfrac12(I_{+i}I_{-j}+I_{-i}I_{+j})\big],\qquad
+b_{ij}=\frac{\mu_0\gamma_d^2\hbar}{4\pi r_{ij}^3}\,\tfrac12(1-3\cos^2\vartheta_{ij}),
+\]
+where $\vartheta_{ij}$ is the angle of the internuclear vector to $\mathbf B_0$. For spin 1,
+\[
+\bra{+1}I_+\ket{0}=\bra{0}I_+\ket{-1}=\sqrt2 .
+\]
+The flip-flop term therefore connects the following pair states, each with a matrix element of
+magnitude $|b_{ij}|$:
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Channel & Pair transition & Energy matched when \\
+\midrule
+same-branch I$_+$ & $\ket{0_i,{+1}_j}\leftrightarrow\ket{{+1}_i,0_j}$ & $\omega_+(\Omega_i)=\omega_+(\Omega_j)$\\
+same-branch I$_-$ & $\ket{{-1}_i,0_j}\leftrightarrow\ket{0_i,{-1}_j}$ & $\omega_-(\Omega_i)=\omega_-(\Omega_j)$\\
+cross-branch & $\ket{0_i,0_j}\leftrightarrow\ket{{+1}_i,{-1}_j}$ & $\omega_+(\Omega_i)=\omega_-(\Omega_j)$\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Same matrix element, different partners.} All three channels have the same dipolar
+matrix element. The cross-branch process exchanges excitation between the two
+\emph{overlapping} lines at one spectral position: it couples the I$_+$ of one spin with the
+I$_-$ of a spin at the mirror orientation. In a random powder its strength relative to the
+same-branch channels is set by
+\begin{itemize}
+\item the density of energy-matched partners: same-branch partners at frequency $R$ have
+capacity $\mu(R)$, cross-branch partners the mirror capacity;
+\item any orientation correlation between dipolar-coupled neighbours (intramolecular
+deuterons have fixed relative bond orientations).
+\end{itemize}
+A cross-branch/same-branch coupling ratio of order unity is therefore the \emph{expected}
+value for uncorrelated pairs, not an arbitrary choice.
+
+\textbf{Double-quantum channel.} The exchange
+$\ket{{+1}_i,{-1}_j}\leftrightarrow\ket{{-1}_i,{+1}_j}$ needs two flip-flops. To first order
+it conserves both Zeeman and quadrupolar energy for \emph{any} orientations, because $E_{+1}$
+and $E_{-1}$ have the same quadrupole shift. It is therefore nonlocal in the spectrum. Through
+an off-resonant intermediate $\ket{0,0}$, its amplitude is of order $b_{ij}^2/\delta$, where
+$\delta$ is the intermediate energy mismatch, so its rate is suppressed by roughly
+$(b/\delta)^2$ relative to resonant flip-flops.
+
+\textbf{Quadrupolar quenching.} Flip-flops between spins whose transitions differ by more than
+the homogeneous width are truncated. Spectral diffusion in resolved quadrupolar spectra is
+therefore local in frequency and channel-specific \cite{SuterErnst1985}. Energy mismatches can
+be bridged by the nuclear dipolar reservoir (three-spin processes, Sec.~\ref{sec:thermalmix}).
+
+\subsection{Pair-current rate equations}
+Let $S(\Delta)$ be the zero-quantum spectral overlap of the two transitions involved (width of
+order the homogeneous width or the dipolar local field), and let $C_{ij}$ describe spatial and
+orientation correlation. The packet equations are reversible pair currents.
+
+\textbf{Same-branch (I$_+$ shown; I$_-$ analogous):}
+\begin{equation}
+J^{+}_{ij}=K\,\mu_i\mu_j\,C_{ij}\,S(R_i-R_j)\big(p_{0i}p_{+j}-p_{+i}p_{0j}\big).
+\end{equation}
+
+\textbf{Cross-branch} (the I$_+$ of $i$ at $R_i$ with the I$_-$ of $j$ at $-R_j$):
+\begin{equation}
+J^{X}_{ij}=K r_X\,\mu_i\mu_j\,C_{ij}\,S(R_i+R_j)\big(p_{0i}p_{0j}-p_{+i}p_{-j}\big).
+\end{equation}
+
+\textbf{Double-quantum:}
+\begin{equation}
+J^{DQ}_{ij}=K r_{DQ}\,\mu_i\mu_j\,C_{ij}\big(p_{-i}p_{+j}-p_{+i}p_{-j}\big).
+\end{equation}
+
+\textbf{Properties} \cite{SuterErnst1985,AbragamGoldman1982}:
+\begin{itemize}
+\item All currents conserve packet mass and total $P$.
+\item Same-branch currents conserve each level total separately.
+\item Cross-branch currents change $Q$ at fixed $P$; they are a spin-spin route by which
+tensor order relaxes to the value set by $P$.
+\item Double-quantum currents move vector polarization across the spectrum without changing
+$Q$.
+\item Every current vanishes for a common Boltzmann distribution. The stationary state is
+unique when the exchange graph is connected.
+\end{itemize}
+The currents are bilinear in the populations. Spin diffusion therefore slows where partner
+transitions are saturated ("flip-flop blocking"), and it cannot be represented as each packet
+relaxing to a fixed reference.
+
+\subsection{Continuum limit: diffusion along the Pake line}
+\label{sec:continuum}
+For small spectral jumps, the kernel reduces to a diffusion equation in frequency. Linearizing
+for a single branch with $\mu(\omega)$ the Pake density,
+\begin{equation}
+\partial_t p=\frac{1}{\mu(\omega)}\,\partial_\omega\!\big[\mu(\omega)\,\tilde D(\omega)\,\partial_\omega p\big],
+\qquad \mu(\omega)\propto\frac{\sin\theta}{|d\omega/d\theta|}.
+\label{eq:continuum}
+\end{equation}
+This is the earlier draft's Laplace--Beltrami operator
+$\sin^{-1}\theta\,\partial_\theta(D\sin\theta\,\partial_\theta n)$ rewritten with the
+Jacobian $J=|d\omega/d\theta|=\Omega\sqrt{2(1-x)(1+2x)}$, $x=\omega/\Omega$, and
+$\tilde D=DJ^2$.
+
+Three caveats apply:
+\begin{enumerate}
+\item The variable $\theta$ labels packets. Spins do not reorient; ``diffusion in $\theta$''
+describes energy-conserving exchange between molecules.
+\item Cross-branch and double-quantum transport are nonlocal and \emph{cannot} be written in
+this form.
+\item The no-flux boundary conditions apply at the edges of the support,
+$\omega\in\{-\Omega/2,\Omega\}$.
+\end{enumerate}
+
+\subsection{Real space, diffusion barrier and microwaves}
+\label{sec:barrier}
+Spectral transport requires spatial proximity, $|b_{ij}|\propto r_{ij}^{-3}$. A Pake histogram
+does not specify which spectral packets are spatial neighbours: the correlation $C_{ij}$ is an
+effective closure.
+
+\textbf{Diffusion barrier.} Deuterons within the "diffusion barrier" of a radical, where the
+hyperfine shift exceeds the dipolar coupling, are detuned from the bulk and exchange with it
+only weakly \cite{Khutsishvili1966,AbragamGoldman1978,Wenckebach2016}.
+
+\textbf{Microwave effects.} Microwave irradiation can modify nuclear spin diffusion by reducing
+the electron polarization. Electron-polarization-dependent proton spin diffusion has been
+observed at 1.2\,K \cite{Chessari2023}.
+
+\status{The mechanisms are established. The deuteron K, $S$ width, $r_X$, $r_{DQ}$ and
+correlations in d-butanol are \textbf{weakly identified}. A fit to one burn/refill experiment
+gave a nonlocal channel much stronger than the $(b/\delta)^2$ estimate. That channel is
+therefore effective, and may absorb reservoir-assisted or real-space transport.}
+
+%==========================================================================================
+\section{Thermal mixing among the nuclei}
+\label{sec:thermalmix}
+Flip-flops between packets of different frequency are allowed when the energy mismatch is
+supplied or absorbed by the nuclear dipolar reservoir (three-spin processes)
+\cite{Goldman1970,AbragamGoldman1982}. With reservoir inverse temperature $\beta_d$, detailed
+balance gives, to first order,
+\begin{equation}
+J_{ij}=H_{ij}\Big[(p_{0i}p_{+j}-p_{+i}p_{0j})+\tfrac12\hbar\beta_d\,E_{ij}\,(p_{0i}p_{+j}+p_{+i}p_{0j})\Big],
+\label{eq:mixing}
+\end{equation}
+where $E_{ij}$ is the energy released. Analogous terms apply to the cross-branch channel, with
+$E=\hbar(R_i+R_j)$. The double-quantum channel releases no energy at first order.
+
+\textbf{Energy conservation.} The spin offset energy
+$E_{\rm spin}=-\hbar\sum R(n_{+1}+n_{-1})$ and the reservoir energy $E_d=-C_d\beta_d$ are
+conserved together:
+\[
+\dot E_{\rm spin}+\dot E_d=0 .
+\]
+Thermal mixing drives the whole line towards a common rotating-frame spin temperature. It
+broadens the effective exchange width beyond the homogeneous width, and it couples to RF
+through Eq.~\eqref{eq:rfdipolar}.
+
+\status{Theory established. Its importance for deuterons in d-butanol, and $C_d$, are
+\textbf{unknown}.}
+
+%==========================================================================================
+\section{Dynamic nuclear polarization of spin-1 nuclei}
+\label{sec:dnp}
+
+\subsection{Overview and regimes}
+Microwaves at $\omega_\mu$ near the electron Larmor frequency $\omega_e$ (140\,GHz at 5\,T)
+transfer electron polarization to the nuclei. Which mechanism dominates depends on the ESR
+width $\Delta_e$ relative to $\omega_d$, on electron spectral diffusion and on $c_e$
+\cite{Jeffries1963,AbragamGoldman1978,deBoer1976,Wenckebach2016}:
+
+\begin{center}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{3.4cm}>{\raggedright\arraybackslash}p{5.2cm}>{\raggedright\arraybackslash}p{6.6cm}@{}}
+\toprule
+Regime & Condition & Mechanism \\
+\midrule
+Solid effect (SE) & $\Delta_e\ll\omega_d$ & forbidden e--n flips at $\omega_e\pm\omega_n$\\
+Differential SE (DSE) & $\Delta_e\gtrsim\omega_d$, weak e--e spectral diffusion & overlapping SE sidebands, net difference\\
+Cross effect (CE) & $\Delta_e>\omega_d$, e--e coupled pairs & three-spin $e_1e_2n$ with $|\omega_{e1}-\omega_{e2}|=\omega_n$\\
+Thermal mixing (TM) & $\Delta_e>\omega_d$, fast e--e spectral diffusion & spin-temperature contact with electron dipolar reservoir\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+For d-butanol with TEMPO or EHBA-Cr(V) at 5\,T, $\Delta_e$ is several hundred MHz, far larger
+than $\omega_d/2\pi=32.7$\,MHz. DNP is then usually described by spin-temperature theory (TM),
+with DSE contributions discussed for ammonia
+\cite{Goertz2004,Meyer2004,deBoer1976,Wenckebach2016}.
+
+For spin 1 every mechanism acts \emph{separately} on the two transitions of each orientation,
+at their own frequencies $\omega_\pm(\Omega)$.
+
+\subsection{Solid effect}
+The hyperfine interaction mixes states, so microwaves at
+\[
+\omega_\mu\simeq\omega_e\mp\omega_\pm(\Omega)
+\]
+flip the electron and the nucleus together \cite{Jeffries1963,AbragamGoldman1978,Hovav2010}.
+In the weak-mixing limit the effective operator is
+\[
+\mathcal H^{\rm eff}_{SE}\propto(A_\perp/\omega_d)\,(S_+I_-+S_-I_+),
+\]
+so the transition rate is proportional to $(A_\perp/\omega_d)^2\omega_{1e}^2$ times the
+electron spectral density. (The mixing coefficient involves $\omega_n$ in the denominator, not
+$\omega_e$.)
+
+For each branch $b\in\{+,-\}$, nucleus-raising ($\uparrow$) and lowering ($\downarrow$) rates
+are
+\begin{equation}
+W_b^{\uparrow,\downarrow}(\Omega;\omega_\mu)=k_{SE}\,c_e\avg{A_\perp^2}\,
+\frac{\omega_{1e}^2T_{2e}}{1+\Delta_{\mp}^2T_{2e}^2+\omega_{1e}^2T_{1e}T_{2e}}\,
+L_e\big(\Delta_\mp\big),\qquad
+\Delta_\mp=\omega_\mu-\big[\omega_e\mp\omega_b(\Omega)\big].
+\label{eq:se}
+\end{equation}
+Here $L_e$ is the ESR line and $\beta=\omega_{1e}^2T_{1e}T_{2e}/(1+\Delta^2T_{2e}^2)$ is
+Jeffries' pumping parameter.
+
+The net pumping direction is proportional to the local electron polarization,
+$P_e^{\rm loc}=P_e^{(0)}/(1+\beta)$. Double-quantum SE ($\Delta m_I=\pm2$) is allowed only at
+higher order and is weak.
+
+The spin-1 SE rate equations in the narrow-line limit, including phonon channels, are given in
+\cite{FeddersSouers1987}. The orientation-resolved generalization adds three things:
+\begin{itemize}
+\item the full $\Omega$ dependence through $\omega_\pm(\Omega)$;
+\item arbitrary ESR shape;
+\item spin diffusion (Sec.~\ref{sec:diffusion}).
+\end{itemize}
+
+\subsection{Differential solid effect}
+When $\Delta_e\gtrsim\omega_d$, the positive and negative SE sidebands from different spin
+packets overlap. The net polarization comes from the \emph{difference} between packets on the
+two sides of $\omega_\mu$ \cite{Wenckebach2016}. The rates become integrals of
+Eq.~\eqref{eq:se} over the ESR line:
+\begin{equation}
+W_b^{\uparrow}-W_b^{\downarrow}\propto
+\int d\omega\,s_e(\omega-\omega_\mu)\,L_e(\omega)\,
+\big[L_e(\omega+\omega_b)-L_e(\omega-\omega_b)\big].
+\end{equation}
+The result is a smooth S-curve whose zero crossing is shifted by line asymmetry
+($g$-anisotropy) and by saturation gradients.
+
+\subsection{Cross effect}
+Two dipolar-coupled electrons whose Larmor frequencies differ by a nuclear transition
+frequency,
+\[
+|\omega_{e1}-\omega_{e2}|\simeq\omega_\pm(\Omega),
+\]
+exchange polarization with the nucleus through the three-spin term
+$S_{1\pm}S_{2\mp}I_{\pm}$ \cite{Hovav2012,Wenckebach2016}. Microwaves saturate one electron of
+the pair. The rate scales with the pair density, and so with $c_e^2$:
+\begin{equation}
+W^{CE,\uparrow\downarrow}_b\propto c_e^2\avg{b_{ee}^2}\!\int\! d\omega\,s_e(\omega-\omega_\mu)L_e(\omega)L_e(\omega\mp\omega_b)
+\big[P_e(\omega\mp\omega_b)-P_e(\omega)\big].
+\end{equation}
+
+\subsection{Thermal mixing and spin temperature}
+\label{sec:tm}
+If electron spectral diffusion is fast, the electron non-Zeeman (dipolar plus offset) energy
+has a single inverse temperature $\beta$ in the frame rotating at $\omega_\mu$
+\cite{Provotorov1962,Borghini1968,AbragamGoldman1978,Goldman1970}.
+
+\textbf{Homogeneous ESR line.} With offset $\Delta=\omega_e-\omega_\mu$, Provotorov's equations
+\eqref{eq:provotorov} apply to the electrons. Under strong saturation ($\alpha=\beta$) the
+steady state is
+\begin{equation}
+\beta\simeq\beta_L\,\frac{\omega_e\,\Delta}{\Delta^2+D_e^2\,T_{1Z}/T_{1D}} .
+\label{eq:tmhomog}
+\end{equation}
+This is odd in $\Delta$, with extrema at $|\Delta|=D_e\sqrt{T_{1Z}/T_{1D}}$, where $D_e$ is the
+electron local field.
+
+\textbf{Inhomogeneous ESR line.} Borghini's spin-temperature model gives the electron
+polarization profile across the line, and $\beta$ is fixed by energy balance between
+microwave absorption and electron spin-lattice relaxation \cite{Borghini1968,AbragamGoldman1978}.
+
+\textbf{Contact with the nuclei.} Through three-spin e--e--n flips, the nuclear Zeeman system
+approaches the same $\beta$:
+\begin{equation}
+\dot{\bm n}(\Omega)\big|_{TM}=-\frac{1}{T_{IS}(\Omega)}\Big[\bm n(\Omega)-\bm n^{ST}(\beta;\Omega)\Big],\qquad
+n^{ST}_{+1}:n^{ST}_0:n^{ST}_{-1}=e^{\beta\hbar\omega_+}:1:e^{-\beta\hbar\omega_-},
+\label{eq:tmcontact}
+\end{equation}
+with each transition driven toward the ratio set by its own frequency. The thermal-contact time
+satisfies $T_{IS}^{-1}\propto c_e$ times the electron dipolar spectral density at the nuclear
+frequency.
+
+Two consequences:
+\begin{enumerate}
+\item DNP by TM drives $P$ and $Q$ toward the spin-temperature relation \eqref{eq:boltzmann},
+up to quadrupole corrections of order $\beta\hbar\omega_Q$. It acts as an \emph{absolute}
+target, $\beta(\omega_\mu)$, not as relaxation toward the current $P$.
+\item If the contact is stronger near the horns or for particular sites, DNP itself is
+orientation selective.
+\end{enumerate}
+
+\textbf{Heat balance.} A consistent three-reservoir model (electron Zeeman, electron dipolar,
+nuclear Zeeman, inverse temperatures $\alpha$, $\beta$, $\beta_n$) has the form
+\begin{equation}
+C_n\dot\beta_n=-\frac{C_n(\beta_n-\beta)}{T_{IS}}-\frac{C_n(\beta_n-\beta_L)}{T_{1n}},\qquad
+C_D\dot\beta=\dots+\frac{C_n(\beta_n-\beta)}{T_{IS}},
+\end{equation}
+where the back-reaction of the nuclei on the electron dipolar reservoir ("nuclear heat load")
+matters for high nuclear heat capacity.
+
+\textbf{Microwave on/off asymmetry.} Microwaves can also change nuclear transport (by reducing
+the electron polarization) separately from pumping \cite{Chessari2023}. An observation that
+about three times more RF power is needed to reach the same peak residual with microwaves on
+constrains the sum of these effects. It does not separate them.
+
+\status{SE, CE, TM and DSE theory are established in the cited texts. For spin-1 deuterons in
+d-butanol the relative weight of the mechanisms, and their orientation dependence, are
+\textbf{not identified}. A phenomenological ``relax to the spin-temperature target'' form, with
+rate and saturation $P$ fitted to build-up data, describes the measured 2014 build-up to 0.8\%
+RMS.}
+
+%==========================================================================================
+\section{The complete master equation}
+\label{sec:master}
+Collect all processes for packet $k=(R,s)$. Its I$_+$ transition lies at $R$ and its I$_-$ at
+the mirror.
+\begin{equation}
+\boxed{\;
+\dot{\bm n}_k=\underbrace{\bm R_{\rm RF}(\bm U,\beta_d)\bm n_k}_{\rm Sec.~\ref{sec:rf}}
++\underbrace{\bm R_{\rm DNP}\bm n_k+\bm s^{\rm DNP}_k}_{\rm Sec.~\ref{sec:dnp}}
++\underbrace{\bm R_{T_1}(\bm n_k-\bm n^{L}_k)}_{\rm Sec.~\ref{sec:t1}}
++\underbrace{\sum_{l}\bm J_{kl}(\bm n,\beta_d)}_{\rm Secs.~\ref{sec:diffusion},\ref{sec:thermalmix}}
+\;}
+\label{eq:master}
+\end{equation}
+Here:
+\begin{itemize}
+\item $\bm R_{\rm RF}$ has rates
+$g^{\pm}_k=c_k\sum_j\kappa\Gamma_k/[\Gamma_k^2+(\omega^\pm_k-\omega_j)^2]\,U_j$, where $U_j$ is
+the carrier power, $c_k$ the per-spin coupling and $\Gamma_k=1/T_{2,k}$.
+\item $\bm R_{T_1}$ contains $W_1$ and $W_2$.
+\item $\bm J_{kl}$ are the three spin-diffusion channels, with the thermal-mixing corrections of
+Eq.~\eqref{eq:mixing}.
+\item With the dipolar reservoir included, $\beta_d$ obeys
+$C_d\dot\beta_d=\sum({\rm offset})\times({\rm current})-C_d(\beta_d-\beta_L)/T_{1d}$.
+\end{itemize}
+AFP enters as an instantaneous map between integration intervals.
+
+\paragraph{Conservation and balance.}
+\begin{itemize}
+\item Every term preserves packet mass.
+\item Spin diffusion conserves $P$.
+\item Exchange together with the reservoir conserves offset energy.
+\item The RF terms remove $P$ and drive towards local saturation.
+\item DNP and $T_1$ are the only sources that restore $P$.
+\end{itemize}
+Without RF, the unique stationary state is the spin-temperature state of the dominant source,
+modified by the reservoir.
+
+\paragraph{Discretization.} The spectral grid must resolve the narrowest of $\Gamma_k$, the
+exchange width and the line edges. Pair sums over Lorentzian tails are Toeplitz (or Hankel, for
+the cross-branch channel) and are evaluated efficiently by FFT. Forward-Euler integration must
+respect $h\sum(\text{outgoing rates})<1$.
+
+%==========================================================================================
+\section{General consequences for tensor polarization}
+\label{sec:consequences}
+The following results follow from Eqs.~\eqref{eq:PQ}, \eqref{eq:rfrate} and \eqref{eq:master}.
+The numbers in brackets are for d-butanol at $P_0=0.50$ ($Q_0=0.197$); they come from numerical
+optimization in the fitted model, are model-dependent, and are given only as orders of
+magnitude.
+
+\begin{enumerate}
+\item \textbf{Saturation versus overlap.} Saturating the I$_-$ transition of a packet with
+capacity $\mu$ raises $Q$ by $\tfrac32\mu(p_0-p_{-1})$ [$0.151\mu$]. Saturating an I$_+$
+lowers it by $\tfrac32\mu(p_{+1}-p_0)$ [$0.349\mu$]. A saturating burn at one frequency always
+affects both overlapping transitions, so its net value depends on their capacities and on
+their relative per-spin rates.
+
+\item \textbf{Equal per-spin rates.} The only lever left is the choice of frequencies.
+Optimized single burns reach [$Q\approx0.237$].
+
+\item \textbf{Perfect selectivity ceiling.} The two transitions of one packet share its
+coupling, so at most the denser packet of each mirror pair can be selectively saturated:
+\[
+Q\le Q_0+\tfrac32(p_0-p_{-1})\sum_{\rm pairs}\max(\mu_k,\mu_{\bar k})
+\]
+[0.360]. If the sparser packet is favoured instead, the bound is [0.261]. The bound for
+saturating all I$_-$ transitions with no overlap at all, $Q_0+\tfrac32(p_0-p_{-1})$ [0.424],
+is unreachable.
+
+\item \textbf{Inversion.} AFP gains are twice the saturation gains at the same spectral
+position, Eq.~\eqref{eq:afpgain}. Two-window AFP gives [0.298 at $\epsilon=1$; 0.278 at
+$\epsilon=0.8$], independent of the unknown RF selectivity.
+
+\item \textbf{Per-spin selectivity sets most of the single-burn range}
+[$0.232$--$0.272$ over plausible to extreme selectivity]. Refilling strength and time-shaping
+add less [$\lesssim0.009$]. Site resolution and the dipolar reservoir change single-burn optima
+by less than $10^{-3}$.
+
+\item \textbf{Steady state with continuous DNP.} DNP restores $P$ while a weak burn converts
+it to tensor order. The optimal constant burn sits where only the I$_-$ line exists (beyond the
+C--D edge). It gives [$Q=0.202$--$0.213$, depending on the transport closure]. Burning the horn
+at the measured DNP rate lowers $Q$ [0.175], because DNP is too slow (435\,s) to replace $P$.
+
+\item \textbf{Transport type is decisive.} If spectral transport stayed within each branch,
+the I$_-$ saturation produced in the I$_-$-only region would be carried into the overlap
+region while DNP resupplies $P$ [steady $Q$ up to 0.24--0.30]. With cross-branch transport
+of comparable strength, as the equal matrix elements of Sec.~\ref{sec:diffusion} suggest for
+uncorrelated pairs, stronger transport \emph{lowers} $Q$ [0.18 and 0.15 at 10$\times$ and
+100$\times$]. This mechanism is the largest open lever, and it is constrained by measurable
+refill behaviour.
+
+\item \textbf{Timing.} For incoherent saturation the response to RF dose is concave:
+already-equalized transitions gain nothing from more power. Spreading a given dose evenly in
+time is optimal. Pulse trains, sweeps and optimized periodic schedules did not beat a steady
+burn [gain $\le0.0016$; long gaps lose up to 0.024]. A transient overshoot after RF switch-on
+[0.003--0.009] can be used once. \emph{This conclusion does not extend to coherent high-power
+sequences}, which can invert populations.
+\end{enumerate}
+
+%==========================================================================================
+\section{What is known and what is not}
+\label{sec:open}
+
+\begin{longtable}{@{}p{3.6cm}p{3.6cm}p{3.1cm}p{4.6cm}@{}}
+\toprule
+Mechanism & Theory & d-butanol status & Measurement that would pin it\\
+\midrule
+\endhead
+Pake spectrum, sites & established \cite{Wasylishen2012,Pake1948} & fitted (0.8\%) & --\\
+Weak-drive RF rate & established \cite{Abragam1961} & strength fitted to one burn & $B_1$ calibration; power/duration series\\
+Per-spin selectivity ($T_2(\Omega)$) & mechanisms known \cite{VanVleck1948} & \textbf{unknown} & narrow-hole widths and initial rates at horn vs pedestal; mirror response\\
+$B_1$ inhomogeneity & known & \textbf{unknown} & nutation; saturation-curve shape\\
+AFP efficiency & established \cite{GarwoodDelaBarre2001} & \textbf{unknown} for selective windows & selective sweeps with line-shape analysis\\
+$T_1$: $W_1$, $W_2$ & established \cite{Abragam1961} & \textbf{not separated} & relaxation of $P$ and $Q$ after manipulation\\
+Same-branch diffusion ($K$, width) & established \cite{SuterErnst1985} & weakly identified & refill after narrow burns\\
+Cross-branch ratio $r_X$ & expected $\sim1$ (equal matrix elements) & \textbf{never fitted} & refill of I$_+$ vs I$_-$ after a burn in the I$_-$-only region\\
+DQ exchange & second order, weak & effective channel fitted strong & refill far from the burn\\
+Nuclear dipolar reservoir & established \cite{Provotorov1962,Goldman1970} & \textbf{unknown} $C_d$ & hole asymmetry; off-resonance RF\\
+DNP mechanism and selectivity & established \cite{AbragamGoldman1978,Wenckebach2016} & effective rate fitted & frequency-resolved build-up after burns\\
+Microwave-modified transport & observed for protons \cite{Chessari2023} & \textbf{unknown} & RF burn/refill with microwaves on vs off\\
+\bottomrule
+\end{longtable}
+
+\paragraph{Open experimental puzzles.}
+\begin{enumerate}
+\item \textbf{The persistent $\sim20\%$ RF-on peak residual.} At about 0.1\,W the peak falls
+quickly, then stalls near 20\% under continued irradiation, while the pedestal burns to about
+zero; higher power burns the peak further. No fitted rate model reproduces this. Candidate
+explanations:
+\begin{itemize}
+\item spatial $B_1$ inhomogeneity (a weakly driven fraction);
+\item strong replenishment of the horn from dense same-branch partners;
+\item hyperfine-shifted or otherwise detuned sub-ensembles;
+\item rotating-frame or dipolar-reservoir saturation, which is not pure equalization;
+\item RF heating.
+\end{itemize}
+Plateau duration and power dependence would discriminate between them.
+
+\item \textbf{Microwave on/off power ratio} (about $3\times$). This requires separating DNP
+pumping from microwave-modified transport.
+
+\item \textbf{Deviations from equal spin temperature} between $P$ and $Q$ under DNP in
+ND$_3$ \cite{Keller2017}. This tests whether quadrupolar order has its own temperature or its
+own contact to the electrons.
+\end{enumerate}
+
+%==========================================================================================
+\appendix
+\section{Spin-1 operators}
+In the basis $(\ket{+1},\ket{0},\ket{-1})$:
+\[
+I_z=\begin{pmatrix}1&0&0\\0&0&0\\0&0&-1\end{pmatrix},\quad
+I_+=\sqrt2\begin{pmatrix}0&1&0\\0&0&1\\0&0&0\end{pmatrix},\quad
+I_x=\tfrac12(I_++I_-),\quad 3I_z^2-2={\rm diag}(1,-2,1).
+\]
+The tensor polarization is $Q=\avg{3I_z^2-2}$ and the vector polarization is $P=\avg{I_z}$.
+
+\section{Pake Jacobian in frequency coordinates}
+With $\omega=\Omega\Pt(\cos\theta)$, we have $\cos^2\theta=(1+2\omega/\Omega)/3$ and
+$\sin^2\theta=\tfrac23(1-\omega/\Omega)$. The Jacobian is
+\[
+J=|d\omega/d\theta|=\Omega\sqrt{2(1-\omega/\Omega)(1+2\omega/\Omega)},
+\]
+and the density is $\mu\propto\sin\theta/J\propto(1+2\omega/\Omega)^{-1/2}$, consistent with
+Eq.~\eqref{eq:pakedensity}. Equation~\eqref{eq:continuum} then follows from the
+Laplace--Beltrami form, with no-flux boundaries at $\omega=-\Omega/2$ and $\omega=\Omega$.
+
+\section{Rate-equation matrices}
+For one packet, write $u_\pm$ for the rate that raises $m$ across the I$_\pm$ transition and
+$d_\pm$ for the rate that lowers it:
+\[
+\bm R=\begin{pmatrix}-d_+&u_+&0\\ d_+&-u_+-d_-&u_-\\0&d_-&-u_-\end{pmatrix},
+\]
+For RF, $u_\pm=d_\pm=g_\pm$; for DNP, $u\neq d$. The relaxation part to the lattice is
+\[
+\bm R_{T_1}=\begin{pmatrix}-W_1-W_2&W_1&W_2\\W_1&-2W_1&W_1\\W_2&W_1&-W_1-W_2\end{pmatrix}
+\]
+(high-temperature form; detailed-balance factors $e^{\pm\beta_L\hbar\omega}$ multiply the
+upward rates).
+
+%==========================================================================================
+\begin{thebibliography}{99}
+
+\bibitem{Abragam1961}
+A.~Abragam, \emph{The Principles of Nuclear Magnetism} (Clarendon Press, Oxford, 1961).
+
+\bibitem{Slichter1990}
+C.~P.~Slichter, \emph{Principles of Magnetic Resonance}, 3rd ed. (Springer, Berlin, 1990).
+
+\bibitem{Wasylishen2012}
+R.~E.~Wasylishen, S.~E.~Ashbrook, and S.~Wimperis (eds.), \emph{NMR of Quadrupolar Nuclei in
+Solid Materials} (John Wiley \& Sons, Chichester, 2012).
+
+\bibitem{CohenReif1957}
+M.~H.~Cohen and F.~Reif, ``Quadrupole effects in nuclear magnetic resonance studies of
+solids,'' Solid State Physics \textbf{5}, 321 (1957).
+
+\bibitem{Pake1948}
+G.~E.~Pake, ``Nuclear resonance absorption in hydrated crystals: fine structure of the proton
+line,'' J.\ Chem.\ Phys.\ \textbf{16}, 327 (1948).
+
+\bibitem{VanVleck1948}
+J.~H.~Van~Vleck, ``The dipolar broadening of magnetic resonance lines in crystals,''
+Phys.\ Rev.\ \textbf{74}, 1168 (1948).
+
+\bibitem{Bloembergen1949}
+N.~Bloembergen, ``On the interaction of nuclear spins in a crystalline lattice,''
+Physica \textbf{15}, 386 (1949).
+
+\bibitem{Redfield1955}
+A.~G.~Redfield, ``Nuclear magnetic resonance saturation and rotary saturation in solids,''
+Phys.\ Rev.\ \textbf{98}, 1787 (1955).
+
+\bibitem{Provotorov1962}
+B.~N.~Provotorov, ``Magnetic resonance saturation in crystals,'' Sov.\ Phys.\ JETP
+\textbf{14}, 1126 (1962).
+
+\bibitem{Goldman1970}
+M.~Goldman, \emph{Spin Temperature and Nuclear Magnetic Resonance in Solids} (Clarendon Press,
+Oxford, 1970).
+
+\bibitem{AbragamGoldman1978}
+A.~Abragam and M.~Goldman, ``Principles of dynamic nuclear polarisation,'' Rep.\ Prog.\ Phys.\
+\textbf{41}, 395 (1978).
+
+\bibitem{AbragamGoldman1982}
+A.~Abragam and M.~Goldman, \emph{Nuclear Magnetism: Order and Disorder} (Clarendon Press,
+Oxford, 1982).
+
+\bibitem{Jeffries1963}
+C.~D.~Jeffries, \emph{Dynamic Nuclear Orientation} (Interscience, New York, 1963).
+
+\bibitem{Borghini1968}
+M.~Borghini, ``Spin-temperature model of nuclear dynamic polarization using free radicals,''
+Phys.\ Rev.\ Lett.\ \textbf{20}, 419 (1968).
+
+\bibitem{Blumberg1960}
+W.~E.~Blumberg, ``Nuclear spin-lattice relaxation caused by paramagnetic impurities,''
+Phys.\ Rev.\ \textbf{119}, 79 (1960).
+
+\bibitem{Khutsishvili1966}
+G.~R.~Khutsishvili, ``Spin diffusion,'' Sov.\ Phys.\ Usp.\ \textbf{8}, 743 (1966).
+
+\bibitem{SuterErnst1985}
+D.~Suter and R.~R.~Ernst, ``Spin diffusion in resolved solid-state NMR spectra,''
+Phys.\ Rev.\ B \textbf{32}, 5608 (1985).
+
+\bibitem{deBoer1976}
+W.~de~Boer, ``Dynamic orientation of nuclei at low temperatures,'' J.\ Low Temp.\ Phys.\
+\textbf{22}, 185 (1976).
+
+\bibitem{Hovav2010}
+Y.~Hovav, A.~Feintuch, and S.~Vega, ``Theoretical aspects of dynamic nuclear polarization in
+the solid state -- the solid effect,'' J.\ Magn.\ Reson.\ \textbf{207}, 176 (2010).
+
+\bibitem{Hovav2012}
+Y.~Hovav, A.~Feintuch, and S.~Vega, ``Theoretical aspects of dynamic nuclear polarization in
+the solid state -- the cross effect,'' J.\ Magn.\ Reson.\ \textbf{214}, 29 (2012).
+
+\bibitem{Wenckebach2016}
+W.~T.~Wenckebach, \emph{Essentials of Dynamic Nuclear Polarization} (Spindrift Publications,
+The Netherlands, 2016).
+
+\bibitem{GarwoodDelaBarre2001}
+M.~Garwood and L.~DelaBarre, ``The return of the frequency sweep: designing adiabatic pulses
+for contemporary NMR,'' J.\ Magn.\ Reson.\ \textbf{153}, 155 (2001).
+
+\bibitem{CrabbMeyer1997}
+D.~G.~Crabb and W.~Meyer, ``Solid polarized targets for nuclear and particle physics
+experiments,'' Annu.\ Rev.\ Nucl.\ Part.\ Sci.\ \textbf{47}, 67 (1997).
+
+\bibitem{Goertz2004}
+St.~Goertz, ``The dynamic nuclear polarization process,'' Nucl.\ Instrum.\ Methods A
+\textbf{526}, 28 (2004).
+
+\bibitem{Meyer2004}
+W.~Meyer, ``Ammonia as a polarized solid target material -- a review,'' Nucl.\ Instrum.\
+Methods A \textbf{526}, 12 (2004).
+
+\bibitem{Dulya1997}
+C.~Dulya \emph{et al.}, ``A line-shape analysis for spin-1 NMR signals,'' Nucl.\ Instrum.\
+Methods A \textbf{398}, 109 (1997).
+
+\bibitem{FeddersSouers1987}
+P.~A.~Fedders and P.~C.~Souers, ``Solid-effect rate equations for a spin-1 nucleus,''
+Phys.\ Rev.\ B \textbf{35}, 3088 (1987).
+
+\bibitem{JiZhi1999}
+L.~Ji~Zhi, ``Spin relaxation in polarized targets with paramagnetic centers,''
+Commun.\ Theor.\ Phys.\ \textbf{31}, 619 (1999).
+
+\bibitem{Chessari2023}
+A.~Chessari \emph{et al.}, Phys.\ Rev.\ B \textbf{107}, 224429 (2023).
+
+\bibitem{KellerSSRF}
+D.~Keller, ``Selective semi-saturation measurement of spin-1,'' Eur.\ Phys.\ J.\ A \textbf{62}, 36 (2026).
+
+\bibitem{Keller2017}
+D.~Keller, ``Modeling alignment enhancement for solid polarized targets,''
+Eur.\ Phys.\ J.\ A \textbf{53}, 155 (2017).
+
+\end{thebibliography}
+\end{document}

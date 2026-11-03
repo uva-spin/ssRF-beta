@@ -131,6 +131,9 @@ reads a spectrum and outputs the Q-optimizing RF program.
 **[Training a polarization model](docs/TRAINING_POLARIZATION_MODEL.md):** train a neural network
 that reads a spectrum, manipulated or not, and outputs the vector and tensor polarization.
 
+**[Notes](notes/):** technical notes on the physics and implementation of the simulator and on
+spin-1 rate equations (LaTeX and PDF).
+
 ## Layout
 
 | Path | Contents |
