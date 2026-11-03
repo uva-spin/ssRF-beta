@@ -151,16 +151,7 @@ Known limits:
 
 - **DNP is phenomenological.** One spin-temperature term, with rate and saturation fitted to
   build-up data. The solid effect, cross effect and thermal mixing are not modelled
-  separately, so there is no dependence on microwave frequency or ESR line.
-- **Transport is weakly identified.** Spin-diffusion parameters, and how strongly flip-flops
-  couple the two overlapping lines (the cross-branch ratio), are not well fixed by data.
-  Spin-1 dipolar matrix elements suggest a cross-branch ratio near 1, which the matched
-  material uses. The same-branch hypothesis would need correlated neighbour orientations.
-- **Per-spin RF selectivity is not identified by data.** It is the difference between the
-  matched, basic and extend materials.
-- **The ~20% RF-on plateau** at the peak, reported experimentally, is not reproduced.
-- **RF calibration** (U ↔ watts, time ↔ seconds) rests on one experiment.
-- **Coherent high-power effects** (nutation, spin locking, finite-adiabaticity AFP) are outside
-  the model; AFP is an idealized instantaneous swap.
+  separately, so there is no dependence on microwave frequency or ESR line in this simplified version.
+
 
 [docs/KEY_RESULTS.md](docs/KEY_RESULTS.md) lists which mechanisms move Q, and by how much.
