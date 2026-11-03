@@ -62,12 +62,29 @@ DEFAULT_CONFIG: Dict = {
         'skip': False,                        # True: states only (spectra + P, Q labels), no optimizer
     },
     'sweep': None,                            # e.g. {'p0_values': [...], 'histories_per_p0': 8, 'times': [...], 'dnp': True}
+    'chain': None,                            # closed-loop mode, see CHAIN_DEFAULTS
     'post': {
         'time': 0.0,                          # free evolution after the optimized pulse (0 = none)
         'steps': 0,                           # number of evenly spaced snapshots recorded over 'time'
         'dnp': False,                         # DNP on during the post-pulse evolution
     },
     'store': {'branches': True, 'populations': True},
+}
+
+# Closed-loop ("chain") mode: optimize -> apply an imperfect version of the program ->
+# evolve -> record -> optimize again. Every optimization is a training sample, and the
+# input states are what an operator sees after earlier (imperfect) optimized pulses.
+CHAIN_DEFAULTS: Dict = {
+    'n_chains': 0,
+    'rounds': 4,                      # optimizations per chain (= samples per chain)
+    'p0_values': None,                # None: P0 uniform in p0_range; else cycled over chains
+    'wait': [2.0, 40.0],              # evolution between the applied pulse and the next input (NMR + control loop latency)
+    'wait_zero_probability': 0.0,
+    'power_scale': [0.3, 1.0],        # applied total power / optimal (uniform)
+    'duration_scale': [0.2, 1.0],     # applied duration / optimal (uniform)
+    'profile_noise': 0.5,             # log-normal sigma of per-bin multiplicative noise (power renormalized)
+    'exact_probability': 0.15,        # chance the optimal program is applied exactly
+    'dnp': True,                      # DNP during the waits (the pulse uses design.dnp_during_pulse)
 }
 
 # Overrides applied on top of the material's own optimizer settings.
@@ -103,6 +120,19 @@ def merged_config(user: Optional[Dict] = None) -> Dict:
             raise ValueError('sweep needs p0_values, histories_per_p0 >= 1 and times')
         if min(sw['times']) < 0 or any(not -0.999 < p < 0.999 for p in sw['p0_values']):
             raise ValueError('sweep times must be >= 0 and p0_values fractions in (-1, 1)')
+    ch = cfg.get('chain')
+    if ch:
+        ch = cfg['chain'] = {**CHAIN_DEFAULTS, **ch}
+        if int(ch['n_chains']) < 1 or int(ch['rounds']) < 1:
+            raise ValueError('chain needs n_chains >= 1 and rounds >= 1')
+        if sw:
+            raise ValueError('choose either sweep or chain mode, not both')
+        for k in ('power_scale', 'duration_scale'):
+            lo, hi = ch[k]
+            if not 0 < lo <= hi <= 1:
+                raise ValueError(f'chain {k} must satisfy 0 < min <= max <= 1 (undershoot only)')
+        if ch['p0_values'] and any(not -0.999 < p < 0.999 for p in ch['p0_values']):
+            raise ValueError('chain p0_values must be fractions in (-1, 1)')
     if cfg['design']['preset'] not in OPTIMIZER_PRESETS:
         raise ValueError(f"Unknown preset {cfg['design']['preset']!r}; choose {sorted(OPTIMIZER_PRESETS)}")
     return cfg
@@ -281,6 +311,93 @@ def make_sweep_group(group: int, seed: int, cfg: Dict, materials: Dict[str, Mate
     return samples, failures
 
 
+def _draw_wait(rng, spec, zero_probability):
+    if rng.random() < zero_probability:
+        return 0.0
+    lo, hi = float(spec[0]), float(spec[1])
+    if hi <= 0:
+        return 0.0
+    if lo > 0:
+        return _loguniform(rng, lo, hi) if hi > lo else lo
+    return _loguniform(rng, min(0.1, hi), hi)
+
+
+def undershoot(powers, duration, ch: Dict, rng):
+    """An imperfect version of an optimal program: scaled power, shortened, noisy profile.
+
+    Only ever reduces total power and duration, so the result stays within the RF caps.
+    """
+    U = np.asarray(powers, float)
+    if rng.random() < ch['exact_probability'] or U.sum() <= 0:
+        return U.copy(), float(duration), dict(exact=True, power_scale=1.0, duration_scale=1.0, profile_noise=0.0)
+    a = float(rng.uniform(*ch['power_scale'])); b = float(rng.uniform(*ch['duration_scale']))
+    sigma = float(ch['profile_noise'])
+    V = U*np.exp(sigma*rng.standard_normal(len(U))) if sigma > 0 else U.copy()
+    if V.sum() > 0:
+        V *= U.sum()/V.sum()
+    V = np.minimum(V, U.max())              # never above the program's own per-bin maximum
+    V *= a
+    return V, float(duration)*b, dict(exact=False, power_scale=a, duration_scale=b, profile_noise=sigma)
+
+
+def apply_program(model, R, powers, duration, dnp_on, dt=None):
+    """Run a synchronized program on the live model (optionally with a finer step)."""
+    model.set_program(synchronized_program(R, powers, duration)); model.start_program(True)
+    old = model.params.dt
+    if dt and np.isfinite(dt):
+        model.params.dt = min(old, float(dt))
+    _run_for(model, duration, rf_on=True, dnp_on=dnp_on)
+    model.params.dt = old
+    model.stop_program(); model.params.rf_enabled = False
+
+
+def make_chain(chain: int, seed: int, cfg: Dict, materials: Dict[str, MaterialConfig]) -> (List[Dict], List[Dict]):
+    """Closed-loop mode: repeated (optimize -> apply imperfectly -> evolve) from one start.
+
+    Round 0 starts from a Boltzmann state at P0 after the configured random history,
+    followed by one wait. Round k > 0 starts from the state left by the imperfectly
+    applied round k-1 program plus a wait. `time_since_burn` is the wait since the
+    last RF. Samples get sample_id = chain * rounds + round, group = chain.
+    """
+    ch = cfg['chain']; K = int(ch['rounds'])
+    rng = np.random.default_rng([seed, 104729, chain])
+    name = cfg['materials'][int(rng.integers(len(cfg['materials'])))]
+    mat = MaterialConfig.from_dict(materials[name].to_dict())
+    p0 = float(ch['p0_values'][chain % len(ch['p0_values'])]) if ch['p0_values'] else float(rng.uniform(*cfg['p0_range']))
+    mat.parameters.update(p0=p0, q0=None, rf_enabled=False, dnp_enabled=False)
+    t0 = time.time()
+    hist = dict(cfg['history'], wait_zero_probability=1.0)          # the chain wait follows instead
+    model, events = generate_state(mat, hist, rng)
+    R = model.Rplus
+    state_seconds = time.time()-t0
+    samples, failures = [], []
+    for k in range(K):
+        wait = _draw_wait(rng, ch['wait'], ch['wait_zero_probability'])
+        _run_for(model, wait, rf_on=False, dnp_on=bool(ch['dnp']))
+        events = events+[dict(kind='wait', duration=wait, dnp=bool(ch['dnp']))]
+        sid = chain*K+k
+        try:
+            work = snapshot_model(model)
+            out = design_from_model(work, mat, cfg, np.random.default_rng([seed, 104729, chain, k]))
+        except Exception as exc:     # without a program the chain cannot continue
+            failures.append(dict(sample_id=sid, group=chain, round=k,
+                                 error=f'{type(exc).__name__}: {exc}', trace=traceback.format_exc()[-2000:]))
+            break
+        samples.append(dict(out, sample_id=sid, material=name, p0=p0, events=events, group=chain,
+                            time_since_burn=wait, chain_round=k, state_seconds=state_seconds))
+        if k == K-1:
+            break
+        U, T, info = undershoot(out['powers'], out['duration'], ch, rng)
+        if not np.isfinite(T) or T <= 0 or U.sum() <= 0:
+            T, info = 0.0, dict(info, skipped=True)
+        else:
+            apply_program(model, R, U, T, dnp_on=bool(cfg['design']['dnp_during_pulse']), dt=out['playback_dt'])
+        events = events+[dict(kind='applied_design', round=k, total_power_U=float(U.sum()), duration=T,
+                              optimal_total_power_U=float(np.sum(out['powers'])),
+                              optimal_duration=float(out['duration']), **info)]
+    return samples, failures
+
+
 def snapshot_model(model):
     return PopulationSnapshot.capture(model).make_model()
 
@@ -308,7 +425,8 @@ def write_shard(path: Path, samples: List[Dict], store: Dict):
         design_seconds=np.array([s['design_seconds'] for s in samples]),
         events_json=np.array([json.dumps(s['events']) for s in samples]),
         group=np.array([s.get('group', s['sample_id']) for s in samples], dtype=np.int64),
-        time_since_burn=np.array([s.get('time_since_burn', float('nan')) for s in samples]))
+        time_since_burn=np.array([s.get('time_since_burn', float('nan')) for s in samples]),
+        chain_round=np.array([s.get('chain_round', -1) for s in samples], dtype=np.int64))
     if 'post_spectra' in samples[0]:
         for k in ('post_times', 'post_spectra', 'post_P', 'post_Q'):
             arrays[k] = np.stack([s[k] for s in samples])
@@ -330,9 +448,10 @@ def run_block(args):
         return dict(start=start, written=0, skipped=True, failures=[])
     materials = {n: MaterialConfig.load(material_path(n)) for n in set(cfg['materials'])}
     samples, failures = [], []
-    if cfg.get('sweep'):                       # in sweep mode a block is a range of groups
+    if cfg.get('sweep') or cfg.get('chain'):   # a block is a range of groups / chains
+        make = make_chain if cfg.get('chain') else make_sweep_group
         for g in range(start, stop):
-            s_, f_ = make_sweep_group(g, seed, cfg, materials)
+            s_, f_ = make(g, seed, cfg, materials)
             samples += s_; failures += f_
         if samples:
             write_shard(path, samples, cfg['store'])
@@ -376,8 +495,10 @@ def write_manifest(out: Path, cfg: Dict, seed: int, n_samples: int, shard_size: 
             'post_times, post_spectra, post_P, post_Q': 'optional: free evolution after the target pulse '
                                                        '(steps x n_bins spectra and their P, Q)',
             'material, p0': 'material name and starting Boltzmann P',
-            'group': 'sweep mode: (P0, history) group index; samples of one group share one burn history',
-            'time_since_burn': 'sweep mode: evolution time between the burn history and the input state (NaN in random mode)',
+            'group': 'sweep mode: (P0, history) group index; chain mode: chain index; random mode: sample id',
+            'time_since_burn': 'sweep mode: evolution time since the burn history; chain mode: time since the last '
+                               'applied RF (NaN in random mode)',
+            'chain_round': 'chain mode: optimization round within the chain (-1 otherwise); group = chain index',
         })
     (out/'manifest.json').write_text(json.dumps(manifest, indent=1))
     return manifest

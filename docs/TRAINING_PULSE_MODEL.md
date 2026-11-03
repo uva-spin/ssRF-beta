@@ -26,6 +26,15 @@ python3 -m pip install -r requirements-ml.txt
 Use [command line data generation](COMMAND_LINE_DATA_GENERATION.md). Every sample is a full
 optimization (about 1–3 CPU-minutes), so plan the dataset carefully.
 
+**Chain mode** is the recommended source. It reproduces the operating scenario: optimize,
+apply the pulse (intentionally imperfectly), let the state evolve for the NMR/control loop
+latency (2–40 s), and re-optimize. Each new state needs its own pulse:
+
+```bash
+python3 generate_training_data.py generate --out data/chain1 --workers 8 --dnp on \
+    --chains 200 --rounds 5 --p0-range 25 35 --power-cap 3 --exposure-cap 102 --config pulse_config.json
+```
+
 **Sweep mode** gives controlled datasets: a grid of starting P values × random burns × times
 after each burn. Each time point gets its own optimized target:
 
@@ -80,6 +89,9 @@ Recommendations:
 - **Scalar head:** mean- and max-pooled bottleneck features, then an MLP giving total power and
   log T.
 - **Program:** U_j = total · softmax(logits)_j, applied for T.
+- **Residual option (`--residual`, recommended):** the profile logits are log(mean training
+  profile) plus a learned correction that starts at zero. The untrained network then already
+  reproduces the mean program, and training only has to learn the state-specific changes.
 
 Before evaluation, every prediction is projected onto the RF limits (total power, total energy,
 duration range), so the output is always a legal program.
@@ -88,7 +100,11 @@ duration range), so the output is always a legal program.
 
 ```bash
 python3 -m ml.train --data data/sweep_dnp_on --out ml_runs/sweep --epochs 300
-python3 -m ml.train --data data/sweep_dnp_on --out ml_runs/sweep_holdout --epochs 300 --holdout-p0 29 33
+python3 -m ml.train --data data/sweep_dnp_on --out ml_runs/sweep_holdout --epochs 300 --holdout-p0 29 33 \
+    --lr 5e-4 --residual
+# train on one dataset, test on an independently generated one
+python3 -m ml.train --data data/chain_v1 --test-data data/chain_probe --out ml_runs/chain_v1 \
+    --epochs 400 --lr 5e-4 --residual
 ```
 
 **Loss:**
@@ -120,6 +136,27 @@ network learned anything state-specific:
 the optimal programs are similar from state to state, and the mean program can already reach
 most of the optimizer's gain. A network is only useful if it clearly beats the baselines,
 especially on held-out P values.
+
+### Example results
+
+All runs use d_butanol_matched, DNP on, P0 25–35%, a 0.3 W power cap and a 10.2 J energy
+cap. Each number is the share of the optimizer's Q gain over no RF, averaged over the test
+states.
+
+| Training data | Test states | Network | Nearest neighbour | Mean program |
+|---|---|---|---|---|
+| Sweep (one burn, then 0–20 s), 240 samples | Held-out P0 29% and 33% (plain network) | 89.2% | 99.9% | 99.1% |
+| Same | Same (`--residual`) | 99.7% | 99.9% | 99.1% |
+| Chain, 70 chains × 6 rounds, 420 samples | 14 independent chains × 4 rounds (`--test-data`), `--residual` | **99.1%** (worst 90%) | 99.8% (worst 95%) | 92.6% (worst 53%) |
+| Same | Same, plain network | 97.8% (worst 52%) | 99.8% | 92.6% |
+
+In the sweep data, one fixed program is already almost optimal, so there is little to learn.
+In chain data, states left by earlier pulses need their own programs:
+- re-applying the average program loses up to half the gain;
+- the residual network recovers 99% of it.
+
+Nearest-neighbour lookup in the training set is still slightly better at this size and should
+be the benchmark to beat as datasets grow.
 
 ## 7. Using a trained model
 

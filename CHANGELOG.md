@@ -16,7 +16,12 @@
   - spectrum → Q-optimizing RF program, with a physics-based evaluation;
   - spectrum → P and Q, with area and Boltzmann-relation baselines.
   Guides: `docs/TRAINING_PULSE_MODEL.md`, `docs/TRAINING_POLARIZATION_MODEL.md`.
-- 458 tests.
+- Chain mode (`--chains N --rounds K`): the closed operating loop. It optimizes, applies an
+  intentionally undershot version of the pulse (scaled power and duration, profile noise),
+  evolves for 2–40 s and re-optimizes, so every state needs its own pulse.
+- `ml.train`: `--residual` learns a correction to the mean training profile, and
+  `--test-data` tests on an independently generated dataset.
+- 460 tests.
 
 ## Production release (2026-11)
 

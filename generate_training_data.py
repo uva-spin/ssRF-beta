@@ -59,7 +59,19 @@ def cmd_generate(a):
         cfg['post']['time'] = a.post_time or 0.0
         cfg['post']['steps'] = a.post_steps or 0
     if a.post_dnp: cfg['post']['dnp'] = True
-    if a.p0_values:                                   # sweep mode
+    if a.chains:                                      # closed-loop chain mode
+        ch = {'n_chains': a.chains, 'rounds': a.rounds,
+              'dnp': (a.dnp == 'on') if a.dnp in ('on', 'off') else True}
+        if a.p0_values: ch['p0_values'] = [v/100 if abs(v) > 1 else v for v in a.p0_values]
+        if a.round_wait: ch['wait'] = list(a.round_wait)
+        if a.round_wait_zero_prob is not None: ch['wait_zero_probability'] = a.round_wait_zero_prob
+        if a.undershoot_power: ch['power_scale'] = list(a.undershoot_power)
+        if a.undershoot_duration: ch['duration_scale'] = list(a.undershoot_duration)
+        if a.profile_noise is not None: ch['profile_noise'] = a.profile_noise
+        if a.exact_prob is not None: ch['exact_probability'] = a.exact_prob
+        if not a.n_burns: cfg['history']['n_burns'] = [0, 1]
+        cfg['chain'] = ch
+    elif a.p0_values:                                 # sweep mode
         vals = [v/100 if abs(v) > 1 else v for v in a.p0_values]
         if not a.n_burns: cfg['history']['n_burns'] = [1, 1]
         cfg['history']['wait_zero_probability'] = 1.0   # evolution after the burn is set by --times
@@ -68,9 +80,12 @@ def cmd_generate(a):
                         'times': sorted(a.times or [0.0]),
                         'dnp': (a.dnp == 'on') if a.dnp in ('on', 'off') else False}
     cfg = datagen.merged_config(cfg)
-    sweep = cfg.get('sweep')
-    if a.shard_size is None: a.shard_size = 1 if sweep else 16
-    if sweep:
+    sweep = cfg.get('sweep'); chain = cfg.get('chain')
+    if a.shard_size is None: a.shard_size = 1 if (sweep or chain) else 16
+    if chain:
+        n_groups = int(chain['n_chains'])
+        a.samples = n_groups*int(chain['rounds'])
+    elif sweep:
         n_groups = len(sweep['p0_values'])*int(sweep['histories_per_p0'])
         a.samples = n_groups*len(sweep['times'])
     elif a.samples is None:
@@ -87,15 +102,16 @@ def cmd_generate(a):
         n_total = a.samples
     datagen.write_manifest(out, cfg, a.seed, n_total, a.shard_size)
 
-    if sweep:   # one shard per group of `shard_size` (P0, history) pairs
-        n_units, unit = n_groups, 'group'
+    if sweep or chain:   # one shard per `shard_size` groups / chains
+        n_units, unit = n_groups, ('chain' if chain else 'group')
     else:
         n_units, unit = n_total, 'sample'
     blocks = [(str(out), s, min(s+a.shard_size, n_units), a.seed, cfg)
               for s in range(0, n_units, a.shard_size)
               if not datagen.shard_path(out, s).exists()]
     extra = (f' Sweep: P0 {sweep["p0_values"]}, {sweep["histories_per_p0"]} histories each, '
-             f'times {sweep["times"]} -> {n_groups} groups.') if sweep else ''
+             f'times {sweep["times"]} -> {n_groups} groups.') if sweep else (
+             f' Chains: {n_groups} x {chain["rounds"]} rounds (optimize -> apply imperfectly -> evolve).' if chain else '')
     print(f'{n_total} samples in shards of {a.shard_size} {unit}(s): {len(blocks)} shard(s) to do, '
           f'{a.workers} worker(s), preset {cfg["design"]["preset"]}.{extra}', flush=True)
     t0 = time.time(); done = 0; failures = []
@@ -178,10 +194,23 @@ def main():
     h.add_argument('--dnp-prob', type=float, help='probability DNP is on during each evolution (default 0.3)')
     w = g.add_argument_group('sweep mode (structured: P0 grid x burn histories x evolution times)')
     w.add_argument('--p0-values', type=float, nargs='+', metavar='P',
-                   help='initial polarizations, percent or fraction (e.g. 25 27 29). Enables sweep mode.')
+                   help='initial polarizations, percent or fraction (e.g. 25 27 29). Enables sweep mode '
+                        '(with --chains: P0 values cycled over the chains).')
     w.add_argument('--histories-per-p0', type=int, default=8, help='random burn histories per P0 (default 8)')
     w.add_argument('--times', type=float, nargs='+', metavar='T',
                    help='evolution times after the burn at which inputs are taken (default 0)')
+    c = g.add_argument_group('chain mode (closed loop: optimize -> apply an undershot program -> evolve -> optimize again)')
+    c.add_argument('--chains', type=int, help='number of chains; enables chain mode (samples = chains x rounds)')
+    c.add_argument('--rounds', type=int, default=4, help='optimizations per chain (default 4)')
+    c.add_argument('--round-wait', type=float, nargs=2, metavar=('MIN', 'MAX'),
+                   help='evolution after each applied pulse before the next input (default 2 40, log-uniform)')
+    c.add_argument('--round-wait-zero-prob', type=float, help='probability of no wait (default 0)')
+    c.add_argument('--undershoot-power', type=float, nargs=2, metavar=('MIN', 'MAX'),
+                   help='applied/optimal total power, uniform (default 0.3 1.0)')
+    c.add_argument('--undershoot-duration', type=float, nargs=2, metavar=('MIN', 'MAX'),
+                   help='applied/optimal duration, uniform (default 0.2 1.0)')
+    c.add_argument('--profile-noise', type=float, help='log-normal per-bin noise on the applied profile (default 0.5)')
+    c.add_argument('--exact-prob', type=float, help='probability the optimal program is applied exactly (default 0.15)')
     q = g.add_argument_group('output evolution (after the optimized pulse)')
     q.add_argument('--post-time', type=float, help='evolve this long after the optimized pulse (simulation time units)')
     q.add_argument('--post-steps', type=int, help='number of evenly spaced spectra recorded over --post-time')

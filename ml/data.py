@@ -30,19 +30,29 @@ def split_groups(groups, seed=0, fractions=(0.8, 0.1, 0.1), test_mask=None):
 
 
 class PulseData:
-    def __init__(self, data_dir, seed=0, completed_only=True, holdout_p0=None):
+    def __init__(self, data_dir, seed=0, completed_only=True, holdout_p0=None, test_dir=None):
+        """test_dir: optional independent dataset (same grid/material) used only for testing;
+        data_dir is then split into train and validation only."""
         self.dir = Path(data_dir)
         self.manifest = json.loads((self.dir/'manifest.json').read_text())
         d = load_dataset(self.dir, FIELDS)
+        d['from_test_dir'] = np.zeros(len(d['sample_id']), bool)
+        if test_dir:
+            e = load_dataset(Path(test_dir), FIELDS)
+            if json.loads((Path(test_dir)/'manifest.json').read_text())['grid']['n_bins'] != self.manifest['grid']['n_bins']:
+                raise ValueError('test dataset has a different frequency grid')
+            e['group'] = e['group']+int(d['group'].max())+1          # keep groups distinct
+            e['from_test_dir'] = np.ones(len(e['sample_id']), bool)
+            d = {k: np.concatenate([d[k], e[k]]) for k in d}
         keep = np.ones(len(d['sample_id']), bool)
         if completed_only:
             keep &= d['status'] == 'completed'
         keep &= d['powers'].sum(1) > 0                         # targets with RF
         self.raw = {k: v[keep] for k, v in d.items()}
         groups = self.raw['group'] if 'group' in self.raw else self.raw['sample_id']
-        mask = None
+        mask = self.raw['from_test_dir'].copy() if test_dir else None
         if holdout_p0:
-            mask = np.zeros(len(groups), bool)
+            mask = np.zeros(len(groups), bool) if mask is None else mask
             for p in holdout_p0:
                 mask |= np.isclose(self.raw['p0'], p, atol=1e-6)
         self.train, self.val, self.test = split_groups(groups, seed, test_mask=mask)

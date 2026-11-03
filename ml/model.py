@@ -24,7 +24,10 @@ class ConvBlock(nn.Module):
 
 
 class SpectrumToPulse(nn.Module):
-    def __init__(self, n_bins=500, width=32, dropout=0.1, in_channels=2):
+    def __init__(self, n_bins=500, width=32, dropout=0.1, in_channels=2, prior_profile=None):
+        """prior_profile: optional mean target profile. The network then learns a correction
+        to it (logits = log prior + learned term, starting at zero), so before training it
+        already reproduces the mean program."""
         super().__init__()
         w = width
         self.enc1 = ConvBlock(in_channels, w)
@@ -38,6 +41,12 @@ class SpectrumToPulse(nn.Module):
         self.drop = nn.Dropout(dropout)
         self.scalars = nn.Sequential(nn.Linear(4*w*2, 64), nn.GELU(), nn.Linear(64, 2))
         self.n_bins = n_bins
+        if prior_profile is None:
+            self.prior_logits = None
+        else:
+            prior = torch.as_tensor(prior_profile, dtype=torch.float32)
+            self.register_buffer('prior_logits', torch.log(prior.clamp_min(1e-8)/prior.sum()))
+            nn.init.zeros_(self.profile.weight); nn.init.zeros_(self.profile.bias)
 
     def forward(self, x):
         e1 = self.enc1(x)                       # N
@@ -53,4 +62,6 @@ class SpectrumToPulse(nn.Module):
         u1 = F.interpolate(d2, size=e1.shape[-1], mode='linear', align_corners=False)
         d1 = self.dec1(torch.cat([u1, e1], 1))
         logits = self.profile(self.drop(d1)).squeeze(1)
+        if self.prior_logits is not None:
+            logits = logits+self.prior_logits
         return logits, s[:, 0], s[:, 1]         # profile logits, total-power (standardized), log T (standardized)
