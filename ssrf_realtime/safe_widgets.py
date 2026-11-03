@@ -1,8 +1,7 @@
-"""Arrow-only GUI number controls, with no mouse-wheel value changes.
+"""Typed numeric fields with bounds checking and no stepping buttons.
 
-The QAbstractSpinBox itself is NOT set read-only (that would disable its
-buttons); only its embedded QLineEdit is. Exact typed entry is offered by
-explicit dialogs elsewhere. Programmatic setValue remains available.
+Commit on Enter or focus loss, never on intermediate keystrokes. Retain Qt's
+numeric validation and programmatic setValue API; ignore wheel/arrow stepping.
 """
 from __future__ import annotations
 from .baseline_gui import QtCore, QtWidgets
@@ -12,22 +11,33 @@ KEYS = QT.Key if hasattr(QT, 'Key') else QT
 EVENT = QtCore.QEvent.Type if hasattr(QtCore.QEvent, 'Type') else QtCore.QEvent
 
 
-class _ArrowOnlyMixin:
-    def _protect(self):
+class _TypedNumberMixin:
+    def _configure_entry(self):
         self.setKeyboardTracking(False)
         self.setAccelerated(False)
-        self.lineEdit().setReadOnly(True)
+        symbols = QtWidgets.QAbstractSpinBox.ButtonSymbols if hasattr(QtWidgets.QAbstractSpinBox, 'ButtonSymbols') else QtWidgets.QAbstractSpinBox
+        self.setButtonSymbols(symbols.NoButtons)
+        self.lineEdit().setReadOnly(False)
         self.lineEdit().setAcceptDrops(False)
         self.setAcceptDrops(False)
         self.lineEdit().installEventFilter(self)
-        self.setToolTip('Use the on-screen up/down arrows. Scrolling and typing do not change this field.')
+        self.setToolTip('Type a value, then press Enter or leave the field to apply it. Scrolling does not change the value.')
+
+    def stepEnabled(self):
+        flags = QtWidgets.QAbstractSpinBox.StepEnabledFlag if hasattr(QtWidgets.QAbstractSpinBox, 'StepEnabledFlag') else QtWidgets.QAbstractSpinBox
+        return flags.StepNone
 
     def wheelEvent(self, event):
         # Ignore, rather than consume, so an enclosing control panel can scroll.
         event.ignore()
 
     def keyPressEvent(self, event):
-        # Keyboard stepping is disabled too: adjustment is by visible GUI arrows.
+        # Enter commits this field without activating a dialog's default button.
+        if event.key() in (KEYS.Key_Return, KEYS.Key_Enter):
+            self.interpretText()
+            self.editingFinished.emit()
+            event.accept()
+            return
         if event.key() in (KEYS.Key_Up, KEYS.Key_Down, KEYS.Key_PageUp, KEYS.Key_PageDown):
             event.ignore()
             return
@@ -45,16 +55,21 @@ class _ArrowOnlyMixin:
         return super().eventFilter(obj, event)
 
 
-class ArrowDoubleSpinBox(_ArrowOnlyMixin, QtWidgets.QDoubleSpinBox):
+class NumericDoubleEdit(_TypedNumberMixin, QtWidgets.QDoubleSpinBox):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._protect()
+        self._configure_entry()
 
 
-class ArrowSpinBox(_ArrowOnlyMixin, QtWidgets.QSpinBox):
+class NumericIntEdit(_TypedNumberMixin, QtWidgets.QSpinBox):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._protect()
+        self._configure_entry()
+
+
+# Compatibility for scripts importing the earlier widget names.
+ArrowDoubleSpinBox = NumericDoubleEdit
+ArrowSpinBox = NumericIntEdit
 
 
 class NoWheelComboBox(QtWidgets.QComboBox):

@@ -92,7 +92,8 @@ class Spin1RealtimeWindow(QtWidgets.QMainWindow):
     ):
         row = QtWidgets.QHBoxLayout()
         lab = QtWidgets.QLabel(label)
-        box = QtWidgets.QDoubleSpinBox()
+        from .safe_widgets import NumericDoubleEdit
+        box = NumericDoubleEdit()
         box.setRange(lo, hi)
         box.setDecimals(decimals)
         box.setSingleStep(step)
@@ -105,7 +106,8 @@ class Spin1RealtimeWindow(QtWidgets.QMainWindow):
     def _int_box(self, label: str, value: int, lo: int, hi: int, step: int, callback: Callable[[int], None]):
         row = QtWidgets.QHBoxLayout()
         lab = QtWidgets.QLabel(label)
-        box = QtWidgets.QSpinBox()
+        from .safe_widgets import NumericIntEdit
+        box = NumericIntEdit()
         box.setRange(lo, hi)
         box.setSingleStep(step)
         box.setValue(value)
@@ -127,7 +129,8 @@ class Spin1RealtimeWindow(QtWidgets.QMainWindow):
         main.addWidget(self.canvas, stretch=5)
 
         side_widget = QtWidgets.QWidget()
-        side_widget.setMaximumWidth(310)
+        self.control_panel = side_widget
+        side_widget.setMinimumWidth(420)
         side_outer = QtWidgets.QVBoxLayout(side_widget)
         side_outer.setContentsMargins(0, 0, 0, 0)
         side_outer.setSpacing(5)
@@ -147,6 +150,7 @@ class Spin1RealtimeWindow(QtWidgets.QMainWindow):
         side_outer.addWidget(pol_box, stretch=0)
 
         scroll = QtWidgets.QScrollArea()
+        self.controls_scroll = scroll
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame if hasattr(QtWidgets.QFrame, "Shape") else QtWidgets.QFrame.NoFrame)
         controls_widget = QtWidgets.QWidget()
@@ -178,7 +182,7 @@ class Spin1RealtimeWindow(QtWidgets.QMainWindow):
 
         rf_box = QtWidgets.QGroupBox("RF center / Voigt rate profile")
         rf_layout = QtWidgets.QVBoxLayout(rf_box)
-        row, self.R_box = self._spin_box("physical R", self.model.params.rf_burn_R, -2.95, 2.95, 0.01, 3, self._set_R)
+        row, self.R_box = self._spin_box("physical R", self.model.params.rf_burn_R, self.model.params.r_min, self.model.params.r_max, 0.01, 3, self._set_R)
         rf_layout.addLayout(row)
         row, self.gamma_box = self._spin_box("common Γ_RF", self.model.params.gamma_rf, 0.0, 50.0, 0.1, 3, self._set_gamma_rf)
         rf_layout.addLayout(row)
@@ -239,7 +243,8 @@ class Spin1RealtimeWindow(QtWidgets.QMainWindow):
         line_layout.addLayout(row)
         side.addWidget(line_box)
 
-        weight_box = QtWidgets.QGroupBox("Pake-density rate weighting")
+        independent = self.model.params.rf_response_mode == 'independent'
+        weight_box = QtWidgets.QGroupBox("DNP density weighting" if independent else "Pake-density rate weighting (legacy RF + DNP)")
         weight_layout = QtWidgets.QVBoxLayout(weight_box)
         row, self.capacity_power_box = self._spin_box(
             "rate-density power",
@@ -261,7 +266,10 @@ class Spin1RealtimeWindow(QtWidgets.QMainWindow):
             self._set_capacity_rate_clip,
         )
         weight_layout.addLayout(row)
-        hint_w = QtWidgets.QLabel("power=0 gives uniform RF/DNP rates; power=1 weights RF and DNP by local Pake density. Diffusion uses packet capacities directly.")
+        hint_w = QtWidgets.QLabel(
+            "These controls affect DNP only. Use RF material response to tune RF separately. Diffusion uses packet capacities directly."
+            if independent else
+            "power=0 gives uniform RF/DNP rates; power=1 weights RF and DNP by local Pake density. Diffusion uses packet capacities directly.")
         hint_w.setWordWrap(True)
         hint_w.setStyleSheet("font-size: 9px;")
         weight_layout.addWidget(hint_w)
@@ -367,6 +375,18 @@ class Spin1RealtimeWindow(QtWidgets.QMainWindow):
 
         self.steps_per_tick = self.steps_box.value()
         self.paused = False
+        self._fit_control_panel()
+
+    def _fit_control_panel(self):
+        """Give the control viewport enough width for its actual contents."""
+        widget = self.controls_scroll.widget()
+        widget.layout().activate()
+        metric = QtWidgets.QStyle.PixelMetric if hasattr(QtWidgets.QStyle, 'PixelMetric') else QtWidgets.QStyle
+        scrollbar = self.style().pixelMetric(metric.PM_ScrollBarExtent)
+        width = widget.minimumSizeHint().width() + scrollbar + 8
+        # Fit the menu without letting its preferred text width take space
+        # away from the plots on smaller displays.
+        self.control_panel.setFixedWidth(max(420, width))
 
     def _init_plots(self) -> None:
         self.ax_spec = self.fig.add_subplot(2, 1, 1)
@@ -480,7 +500,7 @@ class Spin1RealtimeWindow(QtWidgets.QMainWindow):
         if event.inaxes not in (self.ax_spec, self.ax_rf_profile) or event.xdata is None:
             return
         # Keep the spin box and model synchronized.  This triggers _set_R.
-        R = max(-2.95, min(2.95, float(event.xdata)))
+        R = max(self.model.params.r_min, min(self.model.params.r_max, float(event.xdata)))
         self.R_box.setValue(R)
 
     def _set_gamma_rf(self, value: float) -> None:
@@ -669,7 +689,7 @@ class Spin1RealtimeWindow(QtWidgets.QMainWindow):
 
         self.ax_spec.relim()
         self.ax_spec.autoscale_view()
-        self.ax_spec.set_xlim(-3.05, 3.05)
+        self.ax_spec.set_xlim(self.model.params.r_min-.05, self.model.params.r_max+.05)
 
         self.trace_line_Ip_R.set_data(self.trace_t, self.trace_Ip_R)
         self.trace_line_Im_R.set_data(self.trace_t, self.trace_Im_R)
@@ -726,7 +746,8 @@ class Spin1RealtimeWindow(QtWidgets.QMainWindow):
             f"bins>1%={int(float(profile['bins_above_1pct']))}, {profile['backend']}\n"
             f"P_sat={self.model.params.p_dnp_sat:.3f}, DNP rate={self.model.params.dnp_rate:.3e}\n"
             f"line Γ={self.model.params.line_gamma:.3f}, ηcos2φ={self.model.params.line_asym:.3f}\n"
-            f"Pake w: I+@R={fmt(rates['w_Iplus_R'])}, I-@R={fmt(rates['w_Iminus_R'])}\n"
+            f"RF w: I+@R={fmt(rates['rf_weight_Iplus_R'])}, I-@R={fmt(rates['rf_weight_Iminus_R'])}\n"
+            f"DNP w: I+@R={fmt(rates['w_Iplus_R'])}, I-@R={fmt(rates['w_Iminus_R'])}\n"
             f"RF profile@R: I+={fmt(rates['rf_profile_Iplus_R'])}, I-={fmt(rates['rf_profile_Iminus_R'])}\n"
             f"Γeff direct: I+={fmt(rates['gamma_rf_Iplus_R'])}, I-={fmt(rates['gamma_rf_Iminus_R'])}\n"
             f"Γeff opposite packet: +pkt={fmt(rates['gamma_rf_opposite_on_Iplus_packet'])}, "

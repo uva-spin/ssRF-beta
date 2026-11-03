@@ -1,4 +1,4 @@
-"""Explicit, confirmed typed entry. Live spin fields themselves are arrow-only."""
+"""Explicit, confirmed entry for bulk edits and exact numeric values."""
 from __future__ import annotations
 import math
 from .baseline_gui import QtWidgets

@@ -81,7 +81,7 @@ class RFProfile:
 
 @dataclass
 class PulseProgram:
-    n_bins: int = 701
+    n_bins: int = 500
     r_min: float = -3.0
     r_max: float = 3.0
     gain: float = 1.0

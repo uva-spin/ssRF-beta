@@ -1,4 +1,4 @@
-"""Explicit per-bin power/timing editor with arrow-safe numeric controls.
+"""Explicit per-bin power/timing editor with direct numeric entry.
 
 The editor owns a copy of the program. No state, command, or clock is changed
 until the main window receives Apply program. No rate equations are modified.
@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 from .baseline_gui import QtCore, QtWidgets
 from .pulse_program import PulseProgram, RFProfile, BinPulse, make_profile, example_program
-from .safe_widgets import ArrowDoubleSpinBox, ArrowSpinBox, NoWheelComboBox
+from .safe_widgets import NumericDoubleEdit, NumericIntEdit, NoWheelComboBox
 from .profile_editing import (nearest_bin, region_indices, ensure_region_rows,
                               update_rows, parse_custom_table, custom_table_text)
 from .numeric_dialogs import ExactValuesDialog, accepted, run_dialog
@@ -32,7 +32,7 @@ def blocked(obj):
 
 
 def number_box(value=0.0, lo=0.0, hi=1e6, decimals=9, step=0.1):
-    box = ArrowDoubleSpinBox()
+    box = NumericDoubleEdit()
     box.setDecimals(decimals)
     box.setRange(lo, max(hi, float(value)))
     box.setSingleStep(step)
@@ -79,7 +79,7 @@ class ProfileEditor(QtWidgets.QDialog):
         self.resize(980, 565)
         layout = QtWidgets.QVBoxLayout(self); layout.setContentsMargins(7,7,7,7); layout.setSpacing(5)
         hint = QtWidgets.QLabel(
-            'Each row is one bin pulse. Use its arrows, or select rows and click Enter exact values. '
+            'Each row is one bin pulse. Type directly into a field and press Enter or Tab. Select rows and use Enter exact values for bulk edits. '
             'Scroll wheels never change numerical fields. Times are relative to Start program. Overlapping pulses ADD.')
         hint.setWordWrap(True); layout.addWidget(hint)
         body = QtWidgets.QHBoxLayout(); layout.addLayout(body,1)
@@ -128,7 +128,7 @@ class ProfileEditor(QtWidgets.QDialog):
         self.table.setSelectionBehavior(SELECTION.SelectRows)
         mode=VIEW.SelectionMode if hasattr(VIEW,'SelectionMode') else VIEW
         self.table.setSelectionMode(mode.ExtendedSelection)
-        # Permanent arrow editors are explicit; ordinary clicks cannot start typing.
+        # Embedded numeric fields accept direct entry; derived table cells stay read-only.
         self.table.setEditTriggers(EDIT.NoEditTriggers)
         self.table.cellDoubleClicked.connect(self._double_click)
         header=self.table.horizontalHeader()
@@ -145,7 +145,7 @@ class ProfileEditor(QtWidgets.QDialog):
         paste_row=QtWidgets.QHBoxLayout()
         for text,fun in [('Paste custom table...',self._paste_table),('Copy table',self._copy_table)]:
             button=QtWidgets.QPushButton(text);button.clicked.connect(fun);paste_row.addWidget(button)
-        paste_hint=QtWidgets.QLabel('RF power U is the existing base-rate setting, not watts.')
+        paste_hint=QtWidgets.QLabel('RF command U uses the selected material response; it is not calibrated watts.')
         paste_hint.setWordWrap(True);paste_row.addWidget(paste_hint,1);custom_layout.addLayout(paste_row)
         self.tabs.addTab(custom,'Per-bin numerical values')
 
@@ -247,20 +247,20 @@ class ProfileEditor(QtWidgets.QDialog):
                         item.setFlags(FLAGS.ItemIsSelectable|FLAGS.ItemIsEnabled)
                         self.table.setItem(row,col,item)
                     # Each bin has explicit numerical controls; presets are not required.
-                    bin_box=ArrowSpinBox();bin_box.setRange(0,self.program.n_bins-1);bin_box.setValue(pulse.bin_index)
+                    bin_box=NumericIntEdit();bin_box.setRange(0,self.program.n_bins-1);bin_box.setValue(pulse.bin_index)
                     bin_box.setObjectName(f'pulse_{row}_bin')
-                    bin_box.valueChanged.connect(lambda v,r=row:self._arrow_cell(r,1,v))
+                    bin_box.valueChanged.connect(lambda v,r=row:self._numeric_cell(r,1,v))
                     self.table.setCellWidget(row,1,bin_box)
                     for col,value,step in [(3,pulse.rate,.1),(4,pulse.start,.01),(5,pulse.duration,.01)]:
                         box=number_box(value,hi=max(1e6,value),decimals=9,step=step)
                         box.setObjectName(f'pulse_{row}_{col}')
-                        box.valueChanged.connect(lambda v,r=row,c=col:self._arrow_cell(r,c,v))
+                        box.valueChanged.connect(lambda v,r=row,c=col:self._numeric_cell(r,c,v))
                         self.table.setCellWidget(row,col,box)
         finally: self.table.setUpdatesEnabled(True)
         self._summary()
 
-    def _arrow_cell(self,row,col,value):
-        # Preserve selection unless the user steps a row outside it.
+    def _numeric_cell(self,row,col,value):
+        # Preserve selection unless the user edits a row outside it.
         if row not in self._selected_rows():self.table.selectRow(row)
         self.table.item(row,col).setText(str(int(value)) if col==1 else repr(float(value)))
 
@@ -291,7 +291,7 @@ class ProfileEditor(QtWidgets.QDialog):
             c=self.program.compile()
             self.summary.setText(f'{sum(p.enabled for p in self.program.profiles)} enabled profiles; '
                 f'{len(c.bins)} active pulse rows; {np.count_nonzero(c.envelope)} addressed bins; '
-                f'ends at t={c.end_time:.6g}. Largest combined base rate: {self.program.gain*float(c.envelope.max()):.6g}. '
+                f'ends at t={c.end_time:.6g}. Largest combined command: {self.program.gain*float(c.envelope.max()):.6g}. '
                 'Zero power or duration gives no irradiation. Apply program commits; Cancel leaves the running program unchanged.')
         except ValueError as exc:self.summary.setText(str(exc))
 

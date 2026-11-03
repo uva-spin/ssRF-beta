@@ -12,3 +12,9 @@ env/
 
 .DS_Store
 
+
+# LaTeX / editor
+*.aux
+*.log
+*.out
+*.toc

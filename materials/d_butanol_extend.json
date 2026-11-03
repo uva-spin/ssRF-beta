@@ -1,0 +1,173 @@
+{
+  "schema": "ssrf.material.v1",
+  "name": "d_butanol_extend",
+  "description": "Same fitted physics as d_butanol_matched (lineshape, DNP, spin diffusion, RF strength); only the per-spin RF selectivity, which the data do not constrain, is pushed further than d_butanol_basic: peak selectivity 1.0, whole-line density coupling exponent 1.0, orientation-dependent RF width (horn 2.3x narrower than shoulder) and width narrowing with density (exponent -0.3). Dense:sparse per-spin rate ratio at the horn 83:1 (basic 22:1, matched 3.2:1). The 0.1 W reference burn leaves ~23% of the peak after 3 s (reported ~20%) and depletes more slowly afterwards (14% at 10 s). Tensor designer, P0=0.50, no power cap: Q about 0.275. An upper-range setting, not a fit.",
+  "units": "dimensionless_R__simulation_time__base_RF_rate",
+  "parameters": {
+    "grid": {
+      "n_bins": 500,
+      "r_min": -6.186203737076448,
+      "r_max": 6.186203737076448
+    },
+    "lineshape": {
+      "line_gamma": 0.023570570424828668,
+      "line_asym": 1.447515201187307e-12
+    },
+    "multisite_lineshape": {
+      "line_model": "multisite_butanol",
+      "line_cd_scale_R": 1.0,
+      "line_od_scale_ratio": 1.3547449396122688,
+      "line_eta_cd": 0.06476982746346505,
+      "line_eta_od": 0.032668581840043336,
+      "line_od_fraction": 0.02127355765149122,
+      "line_phi_points": 128
+    },
+    "initial_state": {
+      "p0": 0.5,
+      "q0": null
+    },
+    "rf_coupling": {
+      "gamma_rf": 2.0,
+      "capacity_rate_power": 1.0,
+      "capacity_rate_clip": 12.0
+    },
+    "rf_response": {
+      "rf_response_mode": "spectral",
+      "rf_density_power": 0.0,
+      "rf_density_clip": 12.0,
+      "rf_pedestal_gain": 1.0,
+      "rf_peak_center_R": 0.935230172536535,
+      "rf_peak_half_width_R": 0.16,
+      "rf_transition_width_R": 0.25
+    },
+    "rf_saturation": {
+      "rf_spectral_strength": 0.019574144992479153,
+      "rf_homogeneous_hwhm_R": 0.015
+    },
+    "rf_selectivity": {
+      "rf_peak_selectivity": 1.0
+    },
+    "afp": {
+      "afp_efficiency": 1.0,
+      "afp_subset_indices": null
+    },
+    "recovery": {
+      "diffusion_scale": 0.012831942199928678,
+      "zq_width_R": 0.7168835103005139,
+      "diffusion_overlap": "lorentzian",
+      "cross_branch_ratio": 1.0,
+      "double_quantum_ratio": 3.032152771281044,
+      "orientation_corr_fraction": 0.0,
+      "orientation_corr_width_deg": 20.0,
+      "kernel_cutoff_widths": 0.0,
+      "microwave_diffusion_factor": 1.0
+    },
+    "dnp": {
+      "p_dnp_sat": 0.4756327199599703,
+      "dnp_rate": 0.0022983071354703054
+    },
+    "t1": {
+      "t1_rate": 0.0,
+      "t1_p_eq": 0.0
+    },
+    "rf_coupling_profile": {
+      "rf_coupling_density_exponent": 1.0,
+      "rf_coupling_density_clip": 12.0,
+      "rf_coupling_pedestal_gain": 1.0,
+      "rf_coupling_theta_p2": 0.0,
+      "rf_coupling_theta_p4": 0.0,
+      "rf_coupling_od_factor": 1.0
+    },
+    "rf_width_profile": {
+      "rf_width_density_exponent": -0.3,
+      "rf_width_density_clip": 12.0,
+      "rf_width_theta_p2": 0.6,
+      "rf_width_theta_p4": 0.0,
+      "rf_width_od_factor": 1.0
+    },
+    "exchange_profile": {
+      "exchange_density_exponent": 0.0,
+      "exchange_density_clip": 12.0,
+      "exchange_theta_p2": 0.0,
+      "exchange_theta_p4": 0.0,
+      "exchange_od_factor": 1.0
+    },
+    "dnp_profile": {
+      "dnp_theta_p2": 0.0,
+      "dnp_theta_p4": 0.0,
+      "dnp_od_factor": 1.0
+    },
+    "t1_profile": {
+      "t1_density_exponent": 0.0,
+      "t1_density_clip": 12.0,
+      "t1_theta_p2": 0.0,
+      "t1_theta_p4": 0.0,
+      "t1_od_factor": 1.0
+    },
+    "site_resolved": {
+      "site_resolved": false,
+      "exchange_intersite_factor": 1.0
+    },
+    "dipolar_reservoir": {
+      "dipolar_enabled": false,
+      "dipolar_capacity_ratio": 1.0,
+      "dipolar_relaxation_rate": 0.0,
+      "dipolar_beta_lattice": 0.0,
+      "dipolar_beta_initial": 0.0,
+      "dipolar_exchange_coupling": 1.0
+    },
+    "run_defaults": {
+      "rf_burn_R": -0.935230172536535,
+      "rf_enabled": false,
+      "dnp_enabled": false,
+      "diffusion_enabled": true
+    },
+    "numerics": {
+      "dt": 0.03
+    },
+    "display": {
+      "plot_signal_units": false,
+      "plot_divisor": 10.0,
+      "display_scale": 0.10220936455661135,
+      "calibration_p": 0.5,
+      "noise_sigma": 0.0
+    },
+    "legacy_voigt_unused_in_ideal_mode": {
+      "rf_gaussian_fwhm_R": 0.0,
+      "rf_lorentzian_fwhm_R": 0.0,
+      "rf_profile_normalization": "center_bin",
+      "rf_profile_quadrature_order": 0
+    }
+  },
+  "optimizer": {
+    "max_power": 20.0,
+    "min_duration": 0.01,
+    "max_duration": 10.0,
+    "duration_samples": 9,
+    "duration_refinements": 3,
+    "max_iterations": 100,
+    "starts": 2,
+    "search_dt": 0.004,
+    "max_steps": 20000,
+    "max_validation_halvings": 12,
+    "max_wall_seconds": 300.0,
+    "q_absolute_tolerance": 1e-06,
+    "q_relative_tolerance": 0.002,
+    "convergence_tolerance": 2e-05,
+    "candidate_mode": "union",
+    "candidate_threshold": 1e-10,
+    "regions": [],
+    "per_bin_power_limits": {},
+    "seed": 42,
+    "max_total_power": null,
+    "max_total_exposure": null,
+    "profile_smoothing_fwhm_R": 0.03
+  },
+  "gui": {
+    "steps_per_tick": 12,
+    "trace_max_points": 4500,
+    "timer_interval_ms": 35,
+    "window_width": 1200,
+    "window_height": 555
+  }
+}
