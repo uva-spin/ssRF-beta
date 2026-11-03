@@ -12,7 +12,7 @@ interruption.
 
 ## Contents
 - [Quick start](#quick-start)
-- [Two ways to sample states](#two-ways-to-sample-states)
+- [Three ways to sample states](#three-ways-to-sample-states)
 - [How each sample is made](#how-each-sample-is-made)
 - [Options](#options)
 - [RF limits](#rf-limits)
@@ -34,6 +34,12 @@ python3 generate_training_data.py generate --out data/sweep1 --workers 8 --dnp o
         --p0-values 25 27 29 31 33 35 --histories-per-p0 8 --times 0 2 5 10 20 \
         --power-cap 3 --exposure-cap 102 --post-time 30 --post-steps 3
 
+# Chain mode (closed loop, recommended for pulse-design models): optimize, apply an
+# imperfect version of the pulse, evolve 2-40 s, optimize again; 200 chains x 5 rounds
+python3 generate_training_data.py generate --out data/chain1 --workers 8 --dnp on \
+        --chains 200 --rounds 5 --p0-range 25 35 --power-cap 3 --exposure-cap 102 \
+        --config pulse_config.json
+
 python3 generate_training_data.py info --data data/sweep1            # counts, status, ranges
 python3 generate_training_data.py export --data data/sweep1 --sample 17 \
         --program p17.json --state s17.npz                           # one example as GUI files
@@ -43,16 +49,45 @@ python3 run_app.py --state s17.npz --program p17.json                # open it i
 **Resuming.** Run the same command again: shards already written are skipped. In random
 mode, raising `--samples` extends a dataset; every other option must stay the same.
 
-## Two ways to sample states
+## Three ways to sample states
 
 | Mode | Selected by | States | Use it for |
 |---|---|---|---|
+| **Chain** (closed loop) | `--chains N` | Start at P0, then repeat: optimize, apply an imperfect version of that pulse, evolve, optimize again | **The operating scenario**: states left by earlier optimized pulses, after the NMR/control loop latency |
 | **Random** | `--samples N` | Each sample has its own random starting P (`--p0-range`) and random history | Broad coverage |
 | **Sweep** | `--p0-values ...` | A grid of starting P values × `--histories-per-p0` random burns × `--times` after each burn | Controlled datasets; time since the burn as a model input; testing interpolation in P |
 
 In sweep mode, all time points of one burn share the same history, so they form a true
 evolution sequence. Each time point still gets its own optimized target. The total number of
 samples is (number of P values) × (histories per P) × (number of times).
+
+### Chain mode (closed loop)
+
+ssRF does not run continuously. The realistic sequence is: measure, optimize, apply the
+pulse, wait while the NMR and control loop run (a few seconds to tens of seconds), measure
+again and re-optimize. Each new state needs its own pulse to bring it back to the optimum.
+Chain mode generates exactly these states:
+
+1. Round 0: a Boltzmann start at P0 (optionally after a random burn history, `--n-burns`,
+   default 0–1), then one wait.
+2. Optimize from the current state: this is the round's training sample.
+3. Apply the program **imperfectly** (intentional undershoot), so there is always something
+   left to optimize:
+   - the total power is scaled by a factor from `--undershoot-power` (default 0.3–1);
+   - the duration is scaled by a factor from `--undershoot-duration` (default 0.2–1);
+   - the per-bin profile gets log-normal noise (`--profile-noise`, default 0.5), clipped
+     to the program's own per-bin maximum;
+   - with probability `--exact-prob` (default 0.15) the optimum is applied exactly.
+
+   Undershooting only reduces power and time, so the applied pulse always respects the RF
+   caps.
+4. Evolve for `--round-wait` (default 2–40 s, log-uniform), with DNP as set by `--dnp`.
+5. Repeat for `--rounds` optimizations.
+
+Every optimization is a sample, so a chain of K rounds costs K optimizations and gives K
+samples. `time_since_burn` is the wait since the last applied pulse (a model input),
+`chain_round` the round, and `group` the chain. The applied (undershot) programs are recorded
+in `events_json` as `applied_design` events.
 
 ## How each sample is made
 
@@ -84,7 +119,7 @@ Every sample is deterministic for a given `--seed`, so any example can be regene
 | `--out DIR` | — | Output folder |
 | `--samples N` | — | Total samples (random mode) |
 | `--workers W` | CPUs − 1 | Parallel processes |
-| `--shard-size S` | 16 / 1 | Samples per file (random) or burn histories per file (sweep) |
+| `--shard-size S` | 16 / 1 | Samples per file (random), or burn histories (sweep) or chains (chain) per file |
 | `--seed` | 12345 | Global seed |
 | `--materials a,b` | `d_butanol_matched` | Materials to draw from (must share a frequency grid) |
 | `--dnp on/off/random` | random | DNP for the whole sample. **on:** history, optimized pulse and post-pulse evolution. **off:** none. **random:** random during history waits, off during the pulse. |
@@ -97,6 +132,15 @@ Every sample is deterministic for a given `--seed`, so any example can be regene
 | `--wait-range MIN MAX` | 0 600 | Evolution after each history pulse, before the input is recorded |
 | `--wait-zero-prob` | 0.2 | Chance of no evolution after a pulse |
 | `--dnp-prob` | 0.3 | Chance DNP is on during each evolution (with `--dnp random`) |
+| **Chain mode** | | |
+| `--chains N` | — | Number of chains; enables chain mode (samples = N × rounds). P0 from `--p0-range`, or cycled over `--p0-values` |
+| `--rounds K` | 4 | Optimizations per chain |
+| `--round-wait MIN MAX` | 2 40 | Evolution after each applied pulse (log-uniform) |
+| `--round-wait-zero-prob` | 0 | Chance of no wait |
+| `--undershoot-power MIN MAX` | 0.3 1.0 | Applied / optimal total power |
+| `--undershoot-duration MIN MAX` | 0.2 1.0 | Applied / optimal duration |
+| `--profile-noise S` | 0.5 | Log-normal per-bin noise on the applied profile |
+| `--exact-prob` | 0.15 | Chance the optimum is applied exactly |
 | **Sweep mode** | | |
 | `--p0-values P ...` | — | Starting P values, as percent or fractions; enables sweep mode |
 | `--histories-per-p0 M` | 8 | Random burns per P value |
@@ -152,7 +196,7 @@ Each `shard_XXXXXXXX.npz` holds arrays for its samples:
 | Field | Shape | Meaning |
 |---|---|---|
 | `spectrum` | (n, 500) | **input:** total signal at the manipulated/evolved state |
-| `time_since_burn` | (n,) | **input (sweep mode):** time between the burn and the input state |
+| `time_since_burn` | (n,) | **input (sweep / chain mode):** time since the burn, or since the last applied pulse |
 | `spectrum_plus`, `spectrum_minus` | (n, 500) | the two branch signals (optional) |
 | `populations` | (n, 500, 3) | level populations m = +1, 0, −1 (optional) |
 | `state_P`, `state_Q`, `p0` | (n,) | polarizations of the input state; starting P |
@@ -162,7 +206,8 @@ Each `shard_XXXXXXXX.npz` holds arrays for its samples:
 | `no_rf_Q` | (n,) | Q at the same endpoint without RF (control) |
 | `final_spectrum` | (n, 500) | total signal after the target program |
 | `post_times`, `post_spectra`, `post_P`, `post_Q` | (n, K), (n, K, 500), … | evolution after the target pulse (optional) |
-| `group` | (n,) | burn-history index; time points of one burn share it (sweep mode) |
+| `group` | (n,) | burn-history index (sweep mode) or chain index (chain mode); samples sharing it are correlated |
+| `chain_round` | (n,) | chain mode: optimization round (−1 otherwise) |
 | `status` | (n,) | optimizer status (`completed`, `needs_finer_time_step`, …) |
 | `playback_dt` | (n,) | validated integration step for replaying the target |
 | `events_json` | (n,) | the history (JSON) |
@@ -191,8 +236,9 @@ step in `playback_dt`, which `export` prints.
 - **Speed.** Every sample runs a full optimization. With `--preset fast` this takes about
   1–3 minutes per sample on one core, more with power caps and long pulses. Throughput scales
   with `--workers`. Run a few samples first and check `info` for the time per design.
-- **Splitting for training.** In sweep mode, split train/test **by `group`**. Time points of
-  one burn are nearly identical states, so splitting by sample would leak them across sets.
+- **Splitting for training.** In sweep and chain mode, split train/test **by `group`**. Samples
+  of one burn history or chain are correlated, so splitting by sample would leak them across
+  sets.
 - **Optimizer quality.** Targets are local optima of the same model used in the GUI. Keep only
   `status == 'completed'` for strict datasets, and weight or filter by `delta_Q` (or
   `final_Q − no_rf_Q`).

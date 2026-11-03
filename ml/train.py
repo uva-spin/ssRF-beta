@@ -55,15 +55,24 @@ def main():
     ap.add_argument('--lr', type=float, default=2e-3); ap.add_argument('--width', type=int, default=32)
     ap.add_argument('--seed', type=int, default=0); ap.add_argument('--device', default='auto')
     ap.add_argument('--eval-max', type=int, default=200, help='max test states for the physics evaluation')
+    ap.add_argument('--test-data', help='independent dataset used only for testing (then --data is split train/val)')
+    ap.add_argument('--residual', action='store_true',
+                    help='learn a correction to the mean training profile instead of the full profile')
     ap.add_argument('--holdout-p0', type=float, nargs='+', help='P0 values (percent or fraction) used only for testing')
     a = ap.parse_args()
     torch.manual_seed(a.seed); np.random.seed(a.seed)
     out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
-    ds = PulseData(a.data, seed=a.seed, holdout_p0=[v/100 if v > 1 else v for v in a.holdout_p0] if a.holdout_p0 else None)
+    ds = PulseData(a.data, seed=a.seed, holdout_p0=[v/100 if v > 1 else v for v in a.holdout_p0] if a.holdout_p0 else None,
+                   test_dir=a.test_data)
     device = pick_device(a.device)
     print(f'{len(ds.raw["sample_id"])} usable samples: train {len(ds.train)}, val {len(ds.val)}, test {len(ds.test)}; '
           f'time input {ds.use_time}; device {device}')
-    model = SpectrumToPulse(n_bins=ds.raw['spectrum'].shape[1], width=a.width, in_channels=ds.in_channels).to(device)
+    prior = None
+    if a.residual:
+        P = ds.raw['powers'][ds.train].astype(np.float64)
+        prior = (P/P.sum(1, keepdims=True)).mean(0)+1e-6
+    model = SpectrumToPulse(n_bins=ds.raw['spectrum'].shape[1], width=a.width, in_channels=ds.in_channels,
+                            prior_profile=prior).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=1e-4)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, a.epochs)
     tr = [t.to(device) for t in ds.tensors(ds.train)]; va = [t.to(device) for t in ds.tensors(ds.val)]

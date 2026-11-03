@@ -77,3 +77,31 @@ def test_states_only_mode_skips_the_optimizer(tmp_path):
         n = d['populations'][i].astype(float)
         assert abs((n[:, 0]-n[:, 2]).sum()-d['state_P'][i]) < 1e-5
         assert abs((n[:, 0]-2*n[:, 1]+n[:, 2]).sum()-d['state_Q'][i]) < 1e-5
+
+
+def test_chain_mode_rounds_follow_applied_programs(tmp_path):
+    """Chain mode: each round's input is the state after the previous (undershot) program."""
+    cfg = datagen.merged_config({'design': {'preset': 'test'}, 'p0_range': [0.25, 0.3],
+                                 'history': {'n_burns': [0, 0], 'afp_probability': 0.0},
+                                 'chain': {'n_chains': 1, 'rounds': 3, 'wait': [1.0, 2.0],
+                                           'wait_zero_probability': 0.0, 'exact_probability': 0.0}})
+    datagen.write_manifest(tmp_path, cfg, seed=5, n_samples=3, shard_size=1)
+    r = datagen.run_block((str(tmp_path), 0, 1, 5, cfg))
+    assert r['written'] == 3 and not r['failures']
+    d = datagen.load_dataset(tmp_path)
+    assert list(d['chain_round']) == [0, 1, 2] and np.all(d['group'] == 0)
+    assert np.all((d['time_since_burn'] >= 1.0) & (d['time_since_burn'] <= 2.0))
+    ev = json.loads(d['events_json'][2])
+    applied = [e for e in ev if e['kind'] == 'applied_design']
+    assert len(applied) == 2 and all(e['total_power_U'] <= e['optimal_total_power_U']+1e-9 for e in applied)
+    assert all(e['duration'] <= e['optimal_duration']+1e-9 for e in applied)
+    assert not np.allclose(d['spectrum'][0], d['spectrum'][1])     # the applied pulse changed the state
+
+
+def test_undershoot_respects_caps():
+    rng = np.random.default_rng(0)
+    U = np.r_[np.zeros(10), np.full(5, 0.4)]
+    for _ in range(50):
+        V, T, info = datagen.undershoot(U, 30.0, datagen.CHAIN_DEFAULTS, rng)
+        assert V.sum() <= U.sum()+1e-12 and T <= 30.0 and V.max() <= U.max()+1e-12
+        assert np.all(V[:10] == 0)
