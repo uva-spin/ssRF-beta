@@ -121,18 +121,23 @@ python3 design_tensor.py --replay my_design                           # replay a
 python3 tools/plot_tensor_design.py my_design                         # plot the design
 ```
 
+**[Command line data generation](docs/COMMAND_LINE_DATA_GENERATION.md):** generate datasets
+of spectra and their Q-optimizing RF programs for training machine-learning models
+(`generate_training_data.py`).
+
 ## Layout
 
 | Path | Contents |
 |---|---|
 | `run_app.py` | GUI launcher |
 | `design_tensor.py` | Headless tensor designer |
+| `generate_training_data.py` | [Command line data generation](docs/COMMAND_LINE_DATA_GENERATION.md) |
 | `materials/` | The six shipped materials |
 | `programs/reference_0p1W_burn.json` | The 0.1 W, 34 s reference burn |
 | `tools/` | Steady-state RF+DNP optimizer; design plotting |
 | `ssrf_realtime/` | Model, optimizer, extended physics engine, GUI |
 | `docs/` | User guide, materials, physics summary, key results; derivations in `docs/reference/` |
-| `tests/` | 453 tests; legacy materials used as fixtures are in `tests/fixtures/` |
+| `tests/` | 457 tests; legacy materials used as fixtures are in `tests/fixtures/` |
 
 Run the tests with:
 

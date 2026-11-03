@@ -1,5 +1,17 @@
 # Changelog
 
+## Command line data generation (2026-11)
+
+- New `generate_training_data.py` and `ssrf_realtime/datagen.py`: parallel, resumable
+  generation of (spectrum → Q-optimizing RF program) datasets for machine learning.
+  - Two modes: random (P range, random histories) and sweep (P grid × burn histories ×
+    evolution times).
+  - Options for DNP on/off, RF power and energy caps, and post-pulse evolution.
+  - `info` and `export` subcommands. See `docs/COMMAND_LINE_DATA_GENERATION.md`.
+- Fix: the optimizer's validation replay no longer stalls when the state was captured at a
+  large simulation time with a very small playback step.
+- 457 tests.
+
 ## Production release (2026-11)
 
 This replaces the earlier ssRF beta: the display/playback update with demo materials only.
