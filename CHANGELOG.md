@@ -10,7 +10,13 @@
   - `info` and `export` subcommands. See `docs/COMMAND_LINE_DATA_GENERATION.md`.
 - Fix: the optimizer's validation replay no longer stalls when the state was captured at a
   large simulation time with a very small playback step.
-- 457 tests.
+- `--states-only`: spectra with exact P/Q and branch labels and no optimizer, for fast
+  polarization-model datasets.
+- Example PyTorch models in `ml/` (`requirements-ml.txt`):
+  - spectrum → Q-optimizing RF program, with a physics-based evaluation;
+  - spectrum → P and Q, with area and Boltzmann-relation baselines.
+  Guides: `docs/TRAINING_PULSE_MODEL.md`, `docs/TRAINING_POLARIZATION_MODEL.md`.
+- 458 tests.
 
 ## Production release (2026-11)
 

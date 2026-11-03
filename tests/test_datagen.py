@@ -63,3 +63,17 @@ def test_replay_from_late_snapshot_with_tiny_step():
     from ssrf_realtime.tensor_optimizer import synchronized_program
     n, _ = replay(s, synchronized_program(R, u, 0.0237137), 0.0237137, dt=1.46484375e-05)
     assert np.isfinite(n).all() and polarizations(n)['Q'] > polarizations(m.n)['Q']
+
+
+def test_states_only_mode_skips_the_optimizer(tmp_path):
+    cfg = datagen.merged_config({'design': {'skip': True}, 'history': {'n_burns': [0, 1], 'wait': [0.0, 1.0]}})
+    datagen.write_manifest(tmp_path, cfg, seed=5, n_samples=3, shard_size=3)
+    r = datagen.run_block((str(tmp_path), 0, 3, 5, cfg))
+    assert r['written'] == 3 and not r['failures']
+    d = datagen.load_dataset(tmp_path)
+    assert set(d['status']) == {'state_only'} and np.all(d['powers'] == 0) and np.all(np.isnan(d['duration']))
+    # labels are consistent with the stored populations
+    for i in range(3):
+        n = d['populations'][i].astype(float)
+        assert abs((n[:, 0]-n[:, 2]).sum()-d['state_P'][i]) < 1e-5
+        assert abs((n[:, 0]-2*n[:, 1]+n[:, 2]).sum()-d['state_Q'][i]) < 1e-5

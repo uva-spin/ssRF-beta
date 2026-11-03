@@ -112,6 +112,7 @@ Every sample is deterministic for a given `--seed`, so any example can be regene
 | `--post-dnp` | off | DNP on during that evolution |
 | `--design-dnp` | off | Optimize with DNP on during the pulse (overrides `--dnp` for that part) |
 | `--no-populations` | stored | Skip the level populations to save space |
+| `--states-only` | off | Skip the optimizer: store spectra with exact P, Q and branch labels only (~0.5 CPU-s per sample). For [polarization models](TRAINING_POLARIZATION_MODEL.md). |
 
 Time is in simulation units, which are seconds under the d-butanol calibration. Powers are in
 U, where U = 1 corresponds to 0.1 W total.

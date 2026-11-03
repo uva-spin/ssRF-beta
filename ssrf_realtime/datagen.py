@@ -59,6 +59,7 @@ DEFAULT_CONFIG: Dict = {
         'max_total_power': None,              # None = uncapped; 1 = 0.1 W
         'max_total_exposure': None,           # None = uncapped; 34 = 3.4 J
         'overrides': {},                      # any OptimizerSettings field
+        'skip': False,                        # True: states only (spectra + P, Q labels), no optimizer
     },
     'sweep': None,                            # e.g. {'p0_values': [...], 'histories_per_p0': 8, 'times': [...], 'dnp': True}
     'post': {
@@ -178,8 +179,21 @@ def generate_state(cfg_material: MaterialConfig, history: Dict, rng) -> (object,
 
 
 # --------------------------------------------------------------------------- one sample
+def state_fields(model) -> Dict:
+    """Input fields and P, Q labels of the model's current state, with empty design fields."""
+    _, Ip, Im, total = model.spectrum_from_state(model.n)
+    pol = model.polarizations(); N = len(model.mu); nan = float('nan')
+    return dict(state_P=pol['P'], state_Q=pol['Q'],
+        spectrum=total.astype(np.float32), spectrum_plus=Ip.astype(np.float32), spectrum_minus=Im.astype(np.float32),
+        populations=model.n.astype(np.float32),
+        powers=np.zeros(N, np.float32), duration=nan, final_P=nan, final_Q=nan, delta_Q=nan, no_rf_Q=nan,
+        final_spectrum=np.full(N, np.nan, np.float32), status='state_only', playback_dt=nan, design_seconds=0.0)
+
+
 def design_from_model(model, mat: MaterialConfig, cfg: Dict, rng) -> Dict:
     """Optimize the RF program from the model's current state; return input and target fields."""
+    if cfg['design'].get('skip'):
+        return state_fields(model)
     model.params.dnp_enabled = bool(cfg['design']['dnp_during_pulse'])
     model.params.rf_enabled = False
     snapshot = PopulationSnapshot.capture(model)
@@ -356,7 +370,7 @@ def write_manifest(out: Path, cfg: Dict, seed: int, n_samples: int, shard_size: 
             'final_P, final_Q, delta_Q': 'outcome of the target program (predicted by the model)',
             'no_rf_Q': 'Q at the same endpoint with no RF (control)',
             'final_spectrum': 'total signal after the target program',
-            'status': 'optimizer status (completed / needs_finer_time_step / ...)',
+            'status': 'optimizer status (completed / needs_finer_time_step / ...), or state_only when --states-only',
             'playback_dt': 'validated integration step for replaying the target',
             'events_json': 'the random history that produced the input state',
             'post_times, post_spectra, post_P, post_Q': 'optional: free evolution after the target pulse '

@@ -42,6 +42,7 @@ def cmd_generate(a):
     if a.exposure_cap is not None: cfg['design']['max_total_exposure'] = a.exposure_cap
     if a.design_dnp: cfg['design']['dnp_during_pulse'] = True
     if a.no_populations: cfg['store']['populations'] = False
+    if a.states_only: cfg['design']['skip'] = True
     if a.p0_range:
         lo, hi = a.p0_range
         if max(abs(lo), abs(hi)) > 1: lo, hi = lo/100, hi/100      # accept percent
@@ -122,7 +123,8 @@ def cmd_info(a):
         st, cnt = np.unique(d['status'], return_counts=True)
         print('status:', dict(zip(st.tolist(), cnt.tolist())))
         for k in ('state_Q', 'final_Q', 'delta_Q', 'duration', 'design_seconds'):
-            v = d[k]; print(f'  {k:15s} mean {v.mean():.4g}  min {v.min():.4g}  max {v.max():.4g}')
+            v = d[k][np.isfinite(d[k])]
+            if len(v): print(f'  {k:15s} mean {v.mean():.4g}  min {v.min():.4g}  max {v.max():.4g}')
     fl = out/'failures.jsonl'
     if fl.exists(): print('failures:', sum(1 for _ in fl.open()))
 
@@ -159,6 +161,8 @@ def main():
                         'The flags below override individual parts.')
     g.add_argument('--design-dnp', action='store_true', help='optimize with DNP on during the pulse')
     g.add_argument('--no-populations', action='store_true', help='do not store level populations')
+    g.add_argument('--states-only', action='store_true',
+                   help='skip the optimizer: store spectra with their P and Q labels only (fast; for polarization models)')
     g.add_argument('--config', help='JSON file overriding datagen.DEFAULT_CONFIG (history ranges etc.)')
     h = g.add_argument_group('input states (random history before the optimized pulse)')
     h.add_argument('--p0-range', type=float, nargs=2, metavar=('MIN', 'MAX'),
