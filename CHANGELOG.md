@@ -1,5 +1,23 @@
 # Changelog
 
+## Command line data generation (2026-11)
+
+- New `generate_training_data.py` and `ssrf_realtime/datagen.py`: parallel, resumable
+  generation of (spectrum → Q-optimizing RF program) datasets for machine learning.
+  - Two modes: random (P range, random histories) and sweep (P grid × burn histories ×
+    evolution times).
+  - Options for DNP on/off, RF power and energy caps, and post-pulse evolution.
+  - `info` and `export` subcommands. See `docs/COMMAND_LINE_DATA_GENERATION.md`.
+- Fix: the optimizer's validation replay no longer stalls when the state was captured at a
+  large simulation time with a very small playback step.
+- `--states-only`: spectra with exact P/Q and branch labels and no optimizer, for fast
+  polarization-model datasets.
+- Example PyTorch models in `ml/` (`requirements-ml.txt`):
+  - spectrum → Q-optimizing RF program, with a physics-based evaluation;
+  - spectrum → P and Q, with area and Boltzmann-relation baselines.
+  Guides: `docs/TRAINING_PULSE_MODEL.md`, `docs/TRAINING_POLARIZATION_MODEL.md`.
+- 458 tests.
+
 ## Production release (2026-11)
 
 This replaces the earlier ssRF beta: the display/playback update with demo materials only.

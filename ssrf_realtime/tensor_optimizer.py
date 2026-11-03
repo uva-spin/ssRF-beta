@@ -409,7 +409,9 @@ def replay(snapshot,program,T,dt=None,check=None):
     while m.t-t0 < T:
         if check and count%32==0: check()
         remaining=T-(m.t-t0)
-        if remaining<1e-14*max(1,T): break
+        # Stop when the remainder is below floating-point resolution at the current
+        # absolute time (late snapshots have large t; t+remaining would equal t).
+        if remaining<1e-14*max(1,T) or m.t+remaining<=m.t or remaining<=8*np.spacing(m.t): break
         m.params.dt=min(initial_dt,remaining)
         m.step(1)
         count+=1
