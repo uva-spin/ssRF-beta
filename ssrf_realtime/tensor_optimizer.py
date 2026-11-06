@@ -705,13 +705,16 @@ def optimize_tensor(snapshot,settings=None,progress=None,cancel=None):
         raise RuntimeError('No horizon completed before the time budget. Reduce samples/iterations, shorten '
                            'the time range, or increase the budget.')
     check()
-    # Refine numerical endpoint accuracy for EVERY completed candidate before
-    # choosing shortest near-best. Never select by a coarse Q alone.
+    # Re-evaluate on the endpoint grid only when it is actually finer than the
+    # search grid. Otherwise the search Q already is the endpoint Q.
     fine=[]
     for T,u,Q in choices:
         dt_fine=plans[T]['endpoint_dt']
-        Qf,nf=dyn.evaluate(u,T,dt_fine,settings.max_steps,check=check)
-        fine.append((T,u,Qf,nf))
+        if dt_fine < plans[T]['search_dt']*(1-1e-12):
+            Qf,_=dyn.evaluate(u,T,dt_fine,settings.max_steps,check=check)
+            fine.append((T,u,Qf))
+        else:
+            fine.append((T,u,Q))
     dt=min(row['search_dt'] for row in scan)
     best=max(c[2] for c in fine)
     tol=max(settings.q_absolute_tolerance,settings.q_relative_tolerance*max(0,best-initial['Q']))
@@ -724,7 +727,7 @@ def optimize_tensor(snapshot,settings=None,progress=None,cancel=None):
         status='no_improvement'
     else:
         selected=min((c for c in fine if c[2]>=best-tol),key=lambda c:c[0])
-        T,u,Q,nf=selected
+        T,u,Q=selected
         dt=plans[T]['search_dt']; dt_fine=plans[T]['endpoint_dt']
         program=synchronized_program(snapshot.grid,u,T)
         notify(f'Validating T={T:.6g} through the unchanged program scheduler and material model...')
