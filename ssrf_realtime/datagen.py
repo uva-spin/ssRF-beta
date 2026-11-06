@@ -27,7 +27,7 @@ from typing import Dict, List, Optional
 
 import numpy as np
 
-from .afp import mirror_safe_indices
+from .afp import mirror_safe_indices, qneg_sweep_indices
 from .material_config import MaterialConfig, PopulationSnapshot
 from .presets import material_path
 from .pulse_program import BinPulse, PulseProgram, RFProfile
@@ -60,6 +60,8 @@ DEFAULT_CONFIG: Dict = {
         'max_total_exposure': None,           # None = uncapped; 34 = 3.4 J
         'overrides': {},                      # any OptimizerSettings field
         'skip': False,                        # True: states only (spectra + P, Q labels), no optimizer
+        'ssrf': True,                         # write an optimized RF row per input event
+        'afp_profile': False,                 # write a Q<0 AFP row per input event (separate from ssRF)
     },
     'sweep': None,                            # e.g. {'p0_values': [...], 'histories_per_p0': 8, 'times': [...], 'dnp': True}
     'chain': None,                            # closed-loop mode, see CHAIN_DEFAULTS
@@ -90,8 +92,9 @@ CHAIN_DEFAULTS: Dict = {
 # Overrides applied on top of the material's own optimizer settings.
 OPTIMIZER_PRESETS = {
     # Quick targets for large datasets: coarser duration scan, one start, no smoothing pass.
-    'fast': dict(duration_samples=5, duration_refinements=1, max_iterations=40, starts=1,
-                 profile_smoothing_fwhm_R=0.0, max_wall_seconds=180.0, max_validation_halvings=12),
+    'fast': dict(duration_samples=5, duration_refinements=1, max_iterations=8, starts=1,
+                 profile_smoothing_fwhm_R=0.0, search_dt=0.02, max_wall_seconds=60.0,
+                 max_validation_halvings=12),
     # The material's settings with a bounded wall time.
     'standard': dict(max_wall_seconds=600.0, max_validation_halvings=12),
     # As in the GUI, with a generous wall time.
@@ -135,6 +138,8 @@ def merged_config(user: Optional[Dict] = None) -> Dict:
             raise ValueError('chain p0_values must be fractions in (-1, 1)')
     if cfg['design']['preset'] not in OPTIMIZER_PRESETS:
         raise ValueError(f"Unknown preset {cfg['design']['preset']!r}; choose {sorted(OPTIMIZER_PRESETS)}")
+    if cfg['design'].get('afp_profile') and (sw or ch):
+        raise ValueError('afp_profile cannot be combined with sweep or chain')
     return cfg
 
 
@@ -152,11 +157,18 @@ def _run_for(model, duration, rf_on, dnp_on):
     """Advance the live model by `duration` with the given switches (exact pulse edges)."""
     model.params.rf_enabled = bool(rf_on)
     model.params.dnp_enabled = bool(dnp_on)
-    end = model.t+float(duration); dt = float(model.params.dt)
-    while model.t < end-1e-12:
-        model.params.dt = min(dt, end-model.t)
+    duration = float(duration)
+    if duration <= 0:
+        return
+    end = model.t+duration
+    dt = float(model.params.dt)
+    n = int((end-model.t)/dt)
+    if n:
+        model.step(n)
+    if model.t < end-1e-12:
+        model.params.dt = end-model.t
         model.step(1)
-    model.params.dt = dt
+        model.params.dt = dt
 
 
 def generate_state(cfg_material: MaterialConfig, history: Dict, rng) -> (object, List[Dict]):
@@ -209,6 +221,26 @@ def generate_state(cfg_material: MaterialConfig, history: Dict, rng) -> (object,
 
 
 # --------------------------------------------------------------------------- one sample
+def target_modes(cfg: Dict) -> List[str]:
+    """Manipulation kinds written for each input event, in shard order."""
+    modes = []
+    if cfg['design'].get('ssrf', True):
+        modes.append('ssrf')
+    if cfg['design'].get('afp_profile'):
+        modes.append('afp_profile')
+    return modes or ['ssrf']
+
+
+def manipulation_keyword(cfg: Dict, mode: Optional[str] = None) -> str:
+    """ssrf | afp_profile | states_only — the applied target, not the random history."""
+    mode = mode or target_modes(cfg)[0]
+    if mode == 'afp_profile':
+        return 'afp_profile'
+    if cfg['design'].get('skip'):
+        return 'states_only'
+    return 'ssrf'
+
+
 def state_fields(model) -> Dict:
     """Input fields and P, Q labels of the model's current state, with empty design fields."""
     _, Ip, Im, total = model.spectrum_from_state(model.n)
@@ -263,9 +295,32 @@ def design_from_model(model, mat: MaterialConfig, cfg: Dict, rng) -> Dict:
         design_seconds=time.time()-t1)
 
 
-def make_sample(sample_id: int, seed: int, cfg: Dict, materials: Dict[str, MaterialConfig]) -> Dict:
-    """Random mode: random P0 and history, one optimized target."""
-    rng = np.random.default_rng([seed, sample_id])
+def afp_from_model(model, events: List[Dict]) -> Dict:
+    """Q<0 AFP on the current state; spectrum immediately after the flip."""
+    _, Ip, Im, total = model.spectrum_from_state(model.n)
+    pol = model.polarizations()
+    subset = qneg_sweep_indices(np.asarray(Ip) - np.asarray(Im))
+    mask = np.zeros(len(model.mu), np.float32)
+    applied = model.afp_sweep(subset) if subset else []
+    if applied:
+        mask[np.asarray(applied, dtype=int)] = 1.0
+    _, _fIp, _fIm, ftotal = model.spectrum_from_state(model.n)
+    fpol = model.polarizations()
+    ev = list(events)+[dict(kind='afp_profile', efficiency=float(model.params.afp_efficiency), bins=int(len(applied)))]
+    return dict(
+        state_P=pol['P'], state_Q=pol['Q'],
+        spectrum=total.astype(np.float32), spectrum_plus=Ip.astype(np.float32), spectrum_minus=Im.astype(np.float32),
+        populations=model.n.astype(np.float32),
+        powers=mask, duration=0.0,
+        final_P=fpol['P'], final_Q=fpol['Q'], delta_Q=float(fpol['Q']-pol['Q']), no_rf_Q=pol['Q'],
+        final_spectrum=ftotal.astype(np.float32),
+        status='afp_profile', playback_dt=float('nan'), design_seconds=0.0,
+        events=ev, manipulation='afp_profile')
+
+
+def make_event(event_id: int, seed: int, cfg: Dict, materials: Dict[str, MaterialConfig]) -> List[Dict]:
+    """One input history; one row per requested manipulation (ssRF and/or AFP)."""
+    rng = np.random.default_rng([seed, event_id])
     name = cfg['materials'][int(rng.integers(len(cfg['materials'])))]
     mat = MaterialConfig.from_dict(materials[name].to_dict())
     p0 = float(rng.uniform(*cfg['p0_range']))
@@ -273,9 +328,35 @@ def make_sample(sample_id: int, seed: int, cfg: Dict, materials: Dict[str, Mater
     t0 = time.time()
     model, events = generate_state(mat, cfg['history'], rng)
     state_seconds = time.time()-t0
-    out = design_from_model(model, mat, cfg, rng)
-    return dict(out, sample_id=sample_id, material=name, p0=p0, events=events, group=sample_id,
-                time_since_burn=float('nan'), state_seconds=state_seconds)
+    modes = target_modes(cfg)
+    rows = []
+    for k, mode in enumerate(modes):
+        work = snapshot_model(model)
+        if mode == 'afp_profile':
+            out = afp_from_model(work, events)
+            post = cfg['post']
+            if post['steps'] > 0:
+                N = len(out['spectrum']); K = post['steps']
+                out.update(post_times=np.full(K, np.nan, np.float32),
+                           post_spectra=np.full((K, N), np.nan, np.float32),
+                           post_P=np.full(K, np.nan), post_Q=np.full(K, np.nan))
+        else:
+            out = design_from_model(work, mat, cfg, np.random.default_rng([seed, event_id, k]))
+            out['manipulation'] = manipulation_keyword(cfg, 'ssrf')
+            out['events'] = events
+        rows.append(dict(out, sample_id=event_id*len(modes)+k, material=name, p0=p0, group=event_id,
+                         time_since_burn=float('nan'), state_seconds=state_seconds))
+    return rows
+
+
+def make_sample(sample_id: int, seed: int, cfg: Dict, materials: Dict[str, MaterialConfig]) -> Dict:
+    """Random mode: one output row. Dual ssRF+AFP uses `make_event` (same input, two rows)."""
+    modes = target_modes(cfg)
+    event_id = sample_id // len(modes)
+    for row in make_event(event_id, seed, cfg, materials):
+        if row['sample_id'] == sample_id:
+            return row
+    raise KeyError(f'sample {sample_id} not in event {event_id}')
 
 
 def make_sweep_group(group: int, seed: int, cfg: Dict, materials: Dict[str, MaterialConfig]) -> (List[Dict], List[Dict]):
@@ -304,7 +385,8 @@ def make_sweep_group(group: int, seed: int, cfg: Dict, materials: Dict[str, Mate
             work = snapshot_model(model)              # design on a copy; keep evolving the original
             out = design_from_model(work, mat, cfg, np.random.default_rng([seed, 7919, group, k]))
             samples.append(dict(out, sample_id=sid, material=name, p0=p0, events=events, group=group,
-                                time_since_burn=t, state_seconds=state_seconds))
+                                time_since_burn=t, state_seconds=state_seconds,
+                                manipulation=manipulation_keyword(cfg)))
         except Exception as exc:
             failures.append(dict(sample_id=sid, group=group, time_since_burn=t,
                                  error=f'{type(exc).__name__}: {exc}', trace=traceback.format_exc()[-2000:]))
@@ -384,7 +466,8 @@ def make_chain(chain: int, seed: int, cfg: Dict, materials: Dict[str, MaterialCo
                                  error=f'{type(exc).__name__}: {exc}', trace=traceback.format_exc()[-2000:]))
             break
         samples.append(dict(out, sample_id=sid, material=name, p0=p0, events=events, group=chain,
-                            time_since_burn=wait, chain_round=k, state_seconds=state_seconds))
+                            time_since_burn=wait, chain_round=k, state_seconds=state_seconds,
+                            manipulation=manipulation_keyword(cfg)))
         if k == K-1:
             break
         U, T, info = undershoot(out['powers'], out['duration'], ch, rng)
@@ -420,6 +503,7 @@ def write_shard(path: Path, samples: List[Dict], store: Dict):
         delta_Q=np.array([s['delta_Q'] for s in samples]), no_rf_Q=np.array([s['no_rf_Q'] for s in samples]),
         final_spectrum=np.stack([s['final_spectrum'] for s in samples]),
         status=np.array([s['status'] for s in samples]),
+        manipulation=np.array([s.get('manipulation', 'ssrf') for s in samples]),
         playback_dt=np.array([s['playback_dt'] for s in samples]),
         state_seconds=np.array([s['state_seconds'] for s in samples]),
         design_seconds=np.array([s['design_seconds'] for s in samples]),
@@ -440,13 +524,22 @@ def write_shard(path: Path, samples: List[Dict], store: Dict):
     tmp.replace(path)   # atomic: a shard either exists completely or not at all
 
 
+_WORKER_MATERIALS: Optional[Dict[str, MaterialConfig]] = None
+
+
+def init_worker(cfg: Dict):
+    """Load materials once per process (Pool initializer)."""
+    global _WORKER_MATERIALS
+    _WORKER_MATERIALS = {n: MaterialConfig.load(material_path(n)) for n in set(cfg['materials'])}
+
+
 def run_block(args):
     """Worker entry point: generate samples [start, stop) and write one shard."""
     out, start, stop, seed, cfg = args
     out = Path(out); path = shard_path(out, start)
     if path.exists():
         return dict(start=start, written=0, skipped=True, failures=[])
-    materials = {n: MaterialConfig.load(material_path(n)) for n in set(cfg['materials'])}
+    materials = _WORKER_MATERIALS or {n: MaterialConfig.load(material_path(n)) for n in set(cfg['materials'])}
     samples, failures = [], []
     if cfg.get('sweep') or cfg.get('chain'):   # a block is a range of groups / chains
         make = make_chain if cfg.get('chain') else make_sweep_group
@@ -457,11 +550,16 @@ def run_block(args):
             write_shard(path, samples, cfg['store'])
         return dict(start=start, written=len(samples), skipped=False, failures=failures,
                     mean_design_seconds=float(np.mean([s['design_seconds'] for s in samples])) if samples else None)
-    for i in range(start, stop):
+    modes = target_modes(cfg)
+    n_modes = len(modes)
+    for event_id in range(start//n_modes, (stop+n_modes-1)//n_modes):
         try:
-            samples.append(make_sample(i, seed, cfg, materials))
+            for row in make_event(event_id, seed, cfg, materials):
+                if start <= row['sample_id'] < stop:
+                    samples.append(row)
         except Exception as exc:   # record and continue; deterministic seeds allow re-running one id
-            failures.append(dict(sample_id=i, error=f'{type(exc).__name__}: {exc}', trace=traceback.format_exc()[-2000:]))
+            failures.append(dict(sample_id=event_id*n_modes, error=f'{type(exc).__name__}: {exc}',
+                                 trace=traceback.format_exc()[-2000:]))
     if samples:
         write_shard(path, samples, cfg['store'])
     return dict(start=start, written=len(samples), skipped=False, failures=failures,
@@ -490,12 +588,13 @@ def write_manifest(out: Path, cfg: Dict, seed: int, n_samples: int, shard_size: 
             'no_rf_Q': 'Q at the same endpoint with no RF (control)',
             'final_spectrum': 'total signal after the target program',
             'status': 'optimizer status (completed / needs_finer_time_step / ...), or state_only when --states-only',
+            'manipulation': 'target kind: ssrf (optimized RF), afp_profile (Q<0 AFP), or states_only',
             'playback_dt': 'validated integration step for replaying the target',
             'events_json': 'the random history that produced the input state',
             'post_times, post_spectra, post_P, post_Q': 'optional: free evolution after the target pulse '
                                                        '(steps x n_bins spectra and their P, Q)',
             'material, p0': 'material name and starting Boltzmann P',
-            'group': 'sweep mode: (P0, history) group index; chain mode: chain index; random mode: sample id',
+            'group': 'shared input-event id (dual ssRF+AFP); sweep: (P0, history); chain: chain index',
             'time_since_burn': 'sweep mode: evolution time since the burn history; chain mode: time since the last '
                                'applied RF (NaN in random mode)',
             'chain_round': 'chain mode: optimization round within the chain (-1 otherwise); group = chain index',

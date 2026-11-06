@@ -2,7 +2,10 @@
 
   python3 generate_training_data.py generate --out data/run1 --samples 1000 --workers 8
   python3 generate_training_data.py generate --out data/run1 --samples 1000 --workers 8   # resumes
+  python3 generate_training_data.py generate --out data/afp1 --samples 9 --afp-profile --p0-range 40 60
+  python3 generate_training_data.py generate --out data/both --samples 100 --ssrf --afp-profile --p0-range 40 60 --dnp off --power-cap 1
   python3 generate_training_data.py info --data data/run1
+  python3 generate_training_data.py combine --data data/run1
   python3 generate_training_data.py export --data data/run1 --sample 17 --program p17.json --state s17.npz
 
 Every sample is a random history (RF burns, optional AFP, free evolution with or
@@ -13,6 +16,8 @@ See docs/COMMAND_LINE_DATA_GENERATION.md for the format and options.
 import os
 os.environ.setdefault('OPENBLAS_NUM_THREADS', '1')   # one BLAS thread per worker process
 os.environ.setdefault('OMP_NUM_THREADS', '1')
+os.environ.setdefault('MKL_NUM_THREADS', '1')
+os.environ.setdefault('NUMEXPR_NUM_THREADS', '1')
 
 import argparse
 import json
@@ -21,9 +26,38 @@ import time
 from multiprocessing import get_context
 from pathlib import Path
 
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 import numpy as np
 
 from ssrf_realtime import datagen
+
+
+def physical_cpu_count() -> int:
+    """Physical cores, not SMT threads. FFT Euler steps lose time on hyperthreads."""
+    seen = set()
+    root = Path('/sys/devices/system/cpu')
+    if root.is_dir():
+        for p in root.glob('cpu[0-9]*/topology/thread_siblings_list'):
+            try:
+                seen.add(p.read_text().strip())
+            except OSError:
+                pass
+    return len(seen) or (os.cpu_count() or 2)
+
+
+def default_workers() -> int:
+    return max(1, physical_cpu_count() - 1)
+
+
+def combine_shards(src: Path, dst: Path) -> int:
+    data = datagen.load_dataset(src)
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dst.with_name(dst.name + '.tmp.npz')
+    np.savez_compressed(tmp, **data)
+    tmp.replace(dst)
+    return len(data['sample_id'])
 
 
 def cmd_generate(a):
@@ -43,6 +77,20 @@ def cmd_generate(a):
     if a.design_dnp: cfg['design']['dnp_during_pulse'] = True
     if a.no_populations: cfg['store']['populations'] = False
     if a.states_only: cfg['design']['skip'] = True
+    if a.afp_profile:
+        if a.chains or a.p0_values:
+            sys.exit('--afp-profile cannot be combined with --chains or --p0-values')
+        cfg['design']['afp_profile'] = True
+        if a.afp_prob is None:
+            cfg['history']['afp_probability'] = 0.0
+        if a.ssrf is None:
+            cfg['design']['ssrf'] = False
+    if a.ssrf is not None:
+        cfg['design']['ssrf'] = bool(a.ssrf)
+    if not cfg['design'].get('ssrf', True) and not cfg['design'].get('afp_profile'):
+        sys.exit('need --ssrf and/or --afp-profile')
+    if cfg['design'].get('afp_profile') and not cfg['design'].get('ssrf', True) and not a.n_burns:
+        cfg['history']['n_burns'] = [0, 0]
     if a.p0_range:
         lo, hi = a.p0_range
         if max(abs(lo), abs(hi)) > 1: lo, hi = lo/100, hi/100      # accept percent
@@ -81,7 +129,6 @@ def cmd_generate(a):
                         'dnp': (a.dnp == 'on') if a.dnp in ('on', 'off') else False}
     cfg = datagen.merged_config(cfg)
     sweep = cfg.get('sweep'); chain = cfg.get('chain')
-    if a.shard_size is None: a.shard_size = 1 if (sweep or chain) else 16
     if chain:
         n_groups = int(chain['n_chains'])
         a.samples = n_groups*int(chain['rounds'])
@@ -91,15 +138,21 @@ def cmd_generate(a):
     elif a.samples is None:
         sys.exit('--samples is required (or use --p0-values for sweep mode)')
 
+    n_modes = len(datagen.target_modes(cfg))
+    n_events = a.samples
+    n_rows = n_events * n_modes if not (sweep or chain) else a.samples
+    if a.shard_size is None:
+        a.shard_size = 1 if (sweep or chain) else n_modes   # one input event per shard
+
     manifest_file = out/'manifest.json'
     if manifest_file.exists():
         old = json.loads(manifest_file.read_text())
         if old['config'] != cfg or old['seed'] != a.seed or old['shard_size'] != a.shard_size:
             sys.exit(f'{out} already holds a dataset with a different config/seed/shard size. '
                      'Use a new --out directory, or the same options to resume.')
-        n_total = max(a.samples, old['n_samples'])
+        n_total = max(n_rows, old['n_samples'])
     else:
-        n_total = a.samples
+        n_total = n_rows
     datagen.write_manifest(out, cfg, a.seed, n_total, a.shard_size)
 
     if sweep or chain:   # one shard per `shard_size` groups / chains
@@ -112,37 +165,112 @@ def cmd_generate(a):
     extra = (f' Sweep: P0 {sweep["p0_values"]}, {sweep["histories_per_p0"]} histories each, '
              f'times {sweep["times"]} -> {n_groups} groups.') if sweep else (
              f' Chains: {n_groups} x {chain["rounds"]} rounds (optimize -> apply imperfectly -> evolve).' if chain else '')
+    if n_modes > 1 and not sweep and not chain:
+        extra = (f' {n_events} events × {n_modes} manipulations '
+                 f'({", ".join(datagen.target_modes(cfg))}).') + extra
+    n_workers = min(a.workers, len(blocks)) if blocks else 0
     print(f'{n_total} samples in shards of {a.shard_size} {unit}(s): {len(blocks)} shard(s) to do, '
-          f'{a.workers} worker(s), preset {cfg["design"]["preset"]}.{extra}', flush=True)
-    t0 = time.time(); done = 0; failures = []
+          f'{n_workers} worker(s), preset {cfg["design"]["preset"]}.{extra}', flush=True)
+    t0 = time.time(); done = 0; failures = []; finished = 0
     fail_log = out/'failures.jsonl'
-    ctx = get_context('spawn')
-    with ctx.Pool(a.workers) as pool:
-        for r in pool.imap_unordered(datagen.run_block, blocks):
-            done += r['written']; failures += r['failures']
-            for f in r['failures']:
-                with fail_log.open('a') as fh: fh.write(json.dumps(f)+'\n')
-            rate = done/max(time.time()-t0, 1e-9)
-            msg = f'shard {r["start"]:>8d}: {r["written"]} written'
-            if r.get('mean_design_seconds'): msg += f', {r["mean_design_seconds"]:.1f} s/design'
-            print(f'{msg} | total {done} new samples, {len(failures)} failures, {3600*rate:.0f} samples/h', flush=True)
+    if blocks:
+        ctx = get_context('spawn')
+        with ctx.Pool(n_workers, initializer=datagen.init_worker, initargs=(cfg,)) as pool:
+            for r in pool.imap_unordered(datagen.run_block, blocks):
+                done += r['written']; failures += r['failures']; finished += 1
+                for f in r['failures']:
+                    with fail_log.open('a') as fh: fh.write(json.dumps(f)+'\n')
+                elapsed = max(time.time()-t0, 1e-9)
+                eta = (len(blocks)-finished) * elapsed / finished
+                msg = f'shard {r["start"]:>8d}: {r["written"]} written'
+                if r.get('mean_design_seconds'): msg += f', {r["mean_design_seconds"]:.1f} s/design'
+                print(f'{msg} | {finished}/{len(blocks)} shards, {done} new, '
+                      f'{len(failures)} fail, {3600*done/elapsed:.0f} samples/h, ~{eta:.0f}s left', flush=True)
     print(f'Done in {time.time()-t0:.0f} s. Failures logged to {fail_log}' if failures else f'Done in {time.time()-t0:.0f} s.')
+    if list(out.glob('shard_*.npz')):
+        n = combine_shards(out, out.with_suffix('.npz'))
+        print(f'combined {n} samples -> {out.with_suffix(".npz")}')
+    plot_examples(out)
+
+
+def plot_examples(out: Path):
+    """Write lineshape + power-profile plots for a few samples (min/median/max ΔQ)."""
+    out = Path(out)
+    if not (out/'manifest.json').exists() or not list(out.glob('shard_*.npz')):
+        return
+    man = json.loads((out/'manifest.json').read_text())
+    R = np.asarray(man['grid']['R'], dtype=float)
+    d = datagen.load_dataset(out, ['sample_id', 'spectrum', 'final_spectrum', 'powers',
+                                   'delta_Q', 'state_Q', 'final_Q', 'duration'])
+    n = len(d['sample_id'])
+    if n == 0:
+        return
+    finite = np.flatnonzero(np.isfinite(d['delta_Q']))
+    order = finite[np.argsort(d['delta_Q'][finite])] if len(finite) else np.arange(n)
+    picks = [int(order[0])]
+    if len(order) > 2:
+        picks.append(int(order[len(order)//2]))
+    if len(order) > 1:
+        picks.append(int(order[-1]))
+    picks = list(dict.fromkeys(picks))
+    names = {picks[0]: 'smallest ΔQ', picks[-1]: 'largest ΔQ'}
+    if len(picks) == 3:
+        names[picks[1]] = 'median ΔQ'
+    elif len(picks) == 1:
+        names[picks[0]] = 'example'
+    fig, ax = plt.subplots(len(picks), 2, figsize=(9.4, 2.8*len(picks)), sharex='col', squeeze=False)
+    for row, i in enumerate(picks):
+        sid = int(d['sample_id'][i])
+        ax[row, 0].plot(R, d['spectrum'][i], color='#3b6ea5', label='input I+ + I−')
+        if np.isfinite(d['final_spectrum'][i]).any():
+            ax[row, 0].plot(R, d['final_spectrum'][i], color='#c45c26', label='after the pulse')
+        ax[row, 0].set_ylabel('intensity')
+        ax[row, 0].set_title(
+            f'{names[i]}: sample {sid}, Q {d["state_Q"][i]:.3f} → {d["final_Q"][i]:.3f}'
+            f' (ΔQ {d["delta_Q"][i]:+.3f}), T = {d["duration"][i]:.3g}')
+        ax[row, 1].step(R, d['powers'][i], where='mid', color='#2f6f4e')
+        ax[row, 1].set_ylabel('RF command U')
+        ax[row, 1].set_title(f'optimized profile, total power {d["powers"][i].sum():.3g} U')
+        if row == 0:
+            ax[row, 0].legend(frameon=False, loc='upper right')
+        for a in ax[row]:
+            a.grid(True, alpha=0.3)
+            a.set_axisbelow(True)
+    ax[-1, 0].set_xlabel('R')
+    ax[-1, 1].set_xlabel('R')
+    fig.tight_layout()
+    dest = out/'example.png'
+    fig.savefig(dest, dpi=160)
+    plt.close(fig)
+    print(f'Wrote {dest} ({len(picks)} sample{"s" if len(picks)!=1 else ""})')
 
 
 def cmd_info(a):
     out = Path(a.data); m = json.loads((out/'manifest.json').read_text())
-    d = datagen.load_dataset(out, ['sample_id', 'state_Q', 'final_Q', 'delta_Q', 'duration', 'status', 'design_seconds', 'material'])
+    d = datagen.load_dataset(out, ['sample_id', 'state_Q', 'final_Q', 'delta_Q', 'duration', 'status',
+                                   'manipulation', 'design_seconds', 'material'])
     n = len(d['sample_id'])
     print(f"{out}: {n}/{m['n_samples']} samples, grid {m['grid']['n_bins']} bins, preset {m['config']['design']['preset']}, "
           f"materials {m['config']['materials']}")
     if n:
         st, cnt = np.unique(d['status'], return_counts=True)
         print('status:', dict(zip(st.tolist(), cnt.tolist())))
+        if 'manipulation' in d:
+            mt, mc = np.unique(d['manipulation'], return_counts=True)
+            print('manipulation:', dict(zip(mt.tolist(), mc.tolist())))
         for k in ('state_Q', 'final_Q', 'delta_Q', 'duration', 'design_seconds'):
             v = d[k][np.isfinite(d[k])]
             if len(v): print(f'  {k:15s} mean {v.mean():.4g}  min {v.min():.4g}  max {v.max():.4g}')
     fl = out/'failures.jsonl'
     if fl.exists(): print('failures:', sum(1 for _ in fl.open()))
+
+
+def cmd_combine(a):
+    src = Path(a.data)
+    dst = Path(a.out) if a.out else src.with_suffix('.npz')
+    n = combine_shards(src, dst)
+    print(f'{n} samples -> {dst}')
+    plot_examples(src)
 
 
 def cmd_export(a):
@@ -162,9 +290,11 @@ def main():
     sub = ap.add_subparsers(dest='cmd', required=True)
     g = sub.add_parser('generate', help='generate (or resume) a dataset')
     g.add_argument('--out', required=True, help='output directory')
-    g.add_argument('--samples', type=int, help='total number of samples (random mode)')
-    g.add_argument('--workers', type=int, default=max(1, (os.cpu_count() or 2)-1))
-    g.add_argument('--shard-size', type=int, help='samples per shard (random mode, default 16) or '
+    g.add_argument('--samples', type=int,
+                   help='input events (random mode); with --ssrf --afp-profile each event writes two rows')
+    g.add_argument('--workers', type=int, default=default_workers(),
+                   help=f'parallel processes (default {default_workers()}: physical cores minus one)')
+    g.add_argument('--shard-size', type=int, help='rows per shard (random mode, default one input event) or '
                    '(P0, history) groups per shard (sweep mode, default 1)')
     g.add_argument('--seed', type=int, default=12345)
     g.add_argument('--materials', help='comma-separated material names (default d_butanol_matched)')
@@ -179,6 +309,11 @@ def main():
     g.add_argument('--no-populations', action='store_true', help='do not store level populations')
     g.add_argument('--states-only', action='store_true',
                    help='skip the optimizer: store spectra with their P and Q labels only (fast; for polarization models)')
+    g.add_argument('--ssrf', action=argparse.BooleanOptionalAction, default=None,
+                   help='write an optimized RF row per input event (default on, unless --afp-profile is used alone)')
+    g.add_argument('--afp-profile', action='store_true',
+                   help='write a Q<0 AFP row per input event (spectrum immediately after the flip). '
+                        'With --ssrf, both rows share the same history and go in one dataset.')
     g.add_argument('--config', help='JSON file overriding datagen.DEFAULT_CONFIG (history ranges etc.)')
     h = g.add_argument_group('input states (random history before the optimized pulse)')
     h.add_argument('--p0-range', type=float, nargs=2, metavar=('MIN', 'MAX'),
@@ -217,6 +352,10 @@ def main():
     q.add_argument('--post-dnp', action='store_true', help='DNP on during the post-pulse evolution')
     g.set_defaults(func=cmd_generate)
     i = sub.add_parser('info', help='summarize a dataset'); i.add_argument('--data', required=True); i.set_defaults(func=cmd_info)
+    c = sub.add_parser('combine', help='concatenate shard_*.npz in a dataset directory into one file')
+    c.add_argument('--data', required=True, help='dataset directory (reads shard_*.npz)')
+    c.add_argument('--out', help='output .npz (default: <directory>.npz next to that directory)')
+    c.set_defaults(func=cmd_combine)
     e = sub.add_parser('export', help='write one sample as a GUI program (+ state)')
     e.add_argument('--data', required=True); e.add_argument('--sample', type=int, required=True)
     e.add_argument('--program', required=True); e.add_argument('--state')

@@ -40,6 +40,10 @@ python3 generate_training_data.py generate --out data/chain1 --workers 8 --dnp o
         --chains 200 --rounds 5 --p0-range 25 35 --power-cap 3 --exposure-cap 102 \
         --config pulse_config.json
 
+# AFP and ssRF from the same input events, two rows each, one dataset
+python3 generate_training_data.py generate --out data/both --samples 100 --ssrf --afp-profile \
+        --p0-range 40 60 --dnp off --power-cap 1
+
 python3 generate_training_data.py info --data data/sweep1            # counts, status, ranges
 python3 generate_training_data.py export --data data/sweep1 --sample 17 \
         --program p17.json --state s17.npz                           # one example as GUI files
@@ -103,9 +107,11 @@ in `events_json` as `applied_design` events.
    - sweep mode only: free evolution to each of the `--times` after the burn.
 3. **Input.** The total spectrum I+ + I−, which is what the NMR measures. Optionally also
    I+ and I− separately and the full level populations.
-4. **Target.** The tensor optimizer, run from that exact state: per-bin RF powers U_j and a
-   common duration T, the same program the GUI designer produces, within the RF limits
-   below.
+4. **Target.** Each requested manipulation runs on a copy of that state (they are not
+   chained). ssRF is the tensor optimizer (per-bin U_j and duration T). `--afp-profile` is
+   the GUI Q<0 AFP sweep; `final_spectrum` is stored immediately after the flip.
+   `--ssrf --afp-profile` writes both rows into the same dataset, sharing `group`.
+   `--samples` is the number of input events (so 100 events → 200 rows).
 5. **Optional output evolution.** After the target pulse, continue for `--post-time` and
    record `--post-steps` evenly spaced spectra with their P and Q. This shows how long the
    enhancement survives.
@@ -117,9 +123,9 @@ Every sample is deterministic for a given `--seed`, so any example can be regene
 | Option | Default | Meaning |
 |---|---|---|
 | `--out DIR` | — | Output folder |
-| `--samples N` | — | Total samples (random mode) |
-| `--workers W` | CPUs − 1 | Parallel processes |
-| `--shard-size S` | 16 / 1 | Samples per file (random), or burn histories (sweep) or chains (chain) per file |
+| `--samples N` | — | Input events (random mode). With `--ssrf --afp-profile`, each event writes two rows |
+| `--workers W` | physical cores − 1 | Parallel processes. SMT threads (e.g. 48 on a 24-core CPU) oversubscribe the optimizer |
+| `--shard-size S` | one input event / 1 | Rows per file (random; default keeps one event together), or burn histories (sweep) or chains per file. Keep shards while generating; `generate` also writes `<dir>.npz` when it finishes |
 | `--seed` | 12345 | Global seed |
 | `--materials a,b` | `d_butanol_matched` | Materials to draw from (must share a frequency grid) |
 | `--dnp on/off/random` | random | DNP for the whole sample. **on:** history, optimized pulse and post-pulse evolution. **off:** none. **random:** random during history waits, off during the pulse. |
@@ -157,6 +163,8 @@ Every sample is deterministic for a given `--seed`, so any example can be regene
 | `--design-dnp` | off | Optimize with DNP on during the pulse (overrides `--dnp` for that part) |
 | `--no-populations` | stored | Skip the level populations to save space |
 | `--states-only` | off | Skip the optimizer: store spectra with exact P, Q and branch labels only (~0.5 CPU-s per sample). For [polarization models](TRAINING_POLARIZATION_MODEL.md). |
+| `--ssrf` / `--no-ssrf` | on, unless `--afp-profile` alone | Optimized RF row per input event |
+| `--afp-profile` | off | Q<0 AFP row per event (`final_spectrum` right after the flip, `powers` 1 on swept bins). With `--ssrf --afp-profile`, both rows share the same history (`group`) in one file. |
 
 Time is in simulation units, which are seconds under the d-butanol calibration. Powers are in
 U, where U = 1 corresponds to 0.1 W total.
@@ -206,9 +214,10 @@ Each `shard_XXXXXXXX.npz` holds arrays for its samples:
 | `no_rf_Q` | (n,) | Q at the same endpoint without RF (control) |
 | `final_spectrum` | (n, 500) | total signal after the target program |
 | `post_times`, `post_spectra`, `post_P`, `post_Q` | (n, K), (n, K, 500), … | evolution after the target pulse (optional) |
-| `group` | (n,) | burn-history index (sweep mode) or chain index (chain mode); samples sharing it are correlated |
+| `group` | (n,) | shared input event (dual ssRF+AFP), burn-history index (sweep), or chain index; samples sharing it are correlated |
 | `chain_round` | (n,) | chain mode: optimization round (−1 otherwise) |
 | `status` | (n,) | optimizer status (`completed`, `needs_finer_time_step`, …) |
+| `manipulation` | (n,) | target kind: `ssrf`, `afp_profile`, or `states_only` |
 | `playback_dt` | (n,) | validated integration step for replaying the target |
 | `events_json` | (n,) | the history (JSON) |
 | `material`, `sample_id`, `state_seconds`, `design_seconds` | (n,) | bookkeeping |
@@ -233,12 +242,17 @@ step in `playback_dt`, which `export` prints.
 
 ## Cost and practical notes
 
-- **Speed.** Every sample runs a full optimization. With `--preset fast` this takes about
-  1–3 minutes per sample on one core, more with power caps and long pulses. Throughput scales
-  with `--workers`. Run a few samples first and check `info` for the time per design.
-- **Splitting for training.** In sweep and chain mode, split train/test **by `group`**. Samples
-  of one burn history or chain are correlated, so splitting by sample would leak them across
-  sets.
+- **Speed.** Every ssRF row runs a full optimization. With `--preset fast` this takes about
+  5–10 seconds per design on one core with `--power-cap 1`, longer without a cap or with
+  `--preset standard` / `full`. Use `--workers` at physical-core count, not SMT thread
+  count. Run a few samples first and check `info` for the time per design.
+- **Shards.** One file per input event is the default so a slow design cannot stall a
+  batch of others, resume loses at most one event, and progress prints after each
+  optimizer run. Do not merge shards while workers are still running. `generate` writes a
+  combined `<directory>.npz` when it finishes; `combine` does the same on demand.
+- **Splitting for training.** Split train/test **by `group`**. Samples of one input event
+  (dual ssRF+AFP), burn history, or chain are correlated, so splitting by sample would leak
+  them across sets.
 - **Optimizer quality.** Targets are local optima of the same model used in the GUI. Keep only
   `status == 'completed'` for strict datasets, and weight or filter by `delta_Q` (or
   `final_Q − no_rf_Q`).
